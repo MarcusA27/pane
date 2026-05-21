@@ -214,13 +214,15 @@ struct EmptyStatePrompt: View {
 struct Editor: View {
     @Binding var note: Note
     @State private var focusedBlock: UUID?
+    @FocusState private var titleFocused: Bool
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
-            TextField("Title", text: $note.title)
+            TextField(titleFocused ? "Title" : "", text: $note.title)
                 .textFieldStyle(.plain)
                 .font(.system(size: 30, weight: .bold, design: .rounded))
                 .foregroundStyle(.primary)
+                .focused($titleFocused)
 
             ScratchCanvas(blocks: $note.blocks, focusedBlock: $focusedBlock)
         }
@@ -289,6 +291,7 @@ struct BlockView: View {
     private static let verticalInset: CGFloat = 4
 
     var body: some View {
+        let blockID = block.id
         let size = Self.size(for: block.text, canvas: canvasSize)
         let maxX = max(0, Double(canvasSize.width) - Double(size.width))
         let maxY = max(0, Double(canvasSize.height) - Double(size.height))
@@ -296,11 +299,11 @@ struct BlockView: View {
         return CanvasTextEditor(
             text: $block.text,
             isFocused: Binding(
-                get: { focusedBlock == block.id },
+                get: { focusedBlock == blockID },
                 set: { focused in
                     if focused {
-                        focusedBlock = block.id
-                    } else if focusedBlock == block.id {
+                        focusedBlock = blockID
+                    } else if focusedBlock == blockID {
                         focusedBlock = nil
                     }
                 }

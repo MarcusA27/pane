@@ -226,7 +226,8 @@ struct Editor: View {
 
             ScratchCanvas(blocks: $note.blocks, focusedBlock: $focusedBlock)
         }
-        .padding(.horizontal, 38)
+        .padding(.leading, 38)
+        .padding(.trailing, 4)
         .padding(.top, 52)
         .padding(.bottom, 24)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)

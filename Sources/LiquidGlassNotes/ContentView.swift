@@ -212,7 +212,7 @@ struct EmptyStatePrompt: View {
 
 struct Editor: View {
     @Binding var note: Note
-    @FocusState private var focusedBlock: UUID?
+    @State private var focusedBlock: UUID?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
@@ -246,7 +246,7 @@ struct Editor: View {
 
 struct ScratchCanvas: View {
     @Binding var blocks: [TextBlock]
-    var focusedBlock: FocusState<UUID?>.Binding
+    @Binding var focusedBlock: UUID?
 
     var body: some View {
         ZStack(alignment: .topLeading) {
@@ -259,11 +259,11 @@ struct ScratchCanvas: View {
                         text: ""
                     )
                     blocks.append(new)
-                    focusedBlock.wrappedValue = new.id
+                    focusedBlock = new.id
                 }
 
             ForEach($blocks) { $block in
-                BlockView(block: $block, focusedBlock: focusedBlock)
+                BlockView(block: $block, focusedBlock: $focusedBlock)
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -273,20 +273,40 @@ struct ScratchCanvas: View {
 
 struct BlockView: View {
     @Binding var block: TextBlock
-    var focusedBlock: FocusState<UUID?>.Binding
+    @Binding var focusedBlock: UUID?
+    @State private var activeDrag: CGSize = .zero
 
     private static let blockWidth: CGFloat = 480
     private static let blockFont: NSFont = .systemFont(ofSize: 15)
 
     var body: some View {
-        TextEditor(text: $block.text)
-            .scrollContentBackground(.hidden)
-            .background(.clear)
-            .font(.system(size: 15))
-            .foregroundStyle(.primary)
-            .frame(width: Self.blockWidth, height: Self.height(for: block.text))
-            .focused(focusedBlock, equals: block.id)
-            .offset(x: CGFloat(block.x), y: CGFloat(block.y))
+        CanvasTextEditor(
+            text: $block.text,
+            isFocused: Binding(
+                get: { focusedBlock == block.id },
+                set: { focused in
+                    if focused {
+                        focusedBlock = block.id
+                    } else if focusedBlock == block.id {
+                        focusedBlock = nil
+                    }
+                }
+            ),
+            onDragChange: { translation in
+                activeDrag = translation
+            },
+            onDragEnd: { translation in
+                block.x = max(0, block.x + Double(translation.width))
+                block.y = max(0, block.y + Double(translation.height))
+                activeDrag = .zero
+            }
+        )
+        .frame(width: Self.blockWidth, height: Self.height(for: block.text))
+        .offset(
+            x: CGFloat(block.x) + activeDrag.width,
+            y: CGFloat(block.y) + activeDrag.height
+        )
+        .zIndex(activeDrag != .zero ? 1 : 0)
     }
 
     private static func height(for text: String) -> CGFloat {

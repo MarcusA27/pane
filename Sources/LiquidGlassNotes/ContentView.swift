@@ -212,6 +212,7 @@ struct EmptyStatePrompt: View {
 
 struct Editor: View {
     @Binding var note: Note
+    @FocusState private var focusedBlock: UUID?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
@@ -220,8 +221,7 @@ struct Editor: View {
                 .font(.system(size: 30, weight: .bold, design: .rounded))
                 .foregroundStyle(.primary)
 
-            TransparentTextEditor(text: $note.body)
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            ScratchCanvas(blocks: $note.blocks, focusedBlock: $focusedBlock)
         }
         .padding(.horizontal, 38)
         .padding(.top, 52)
@@ -234,5 +234,68 @@ struct Editor: View {
                 .padding(.trailing, 38)
                 .padding(.top, 20)
         }
+        .onChange(of: focusedBlock) { oldID, _ in
+            guard let oldID,
+                  let block = note.blocks.first(where: { $0.id == oldID }),
+                  block.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            else { return }
+            note.blocks.removeAll { $0.id == oldID }
+        }
+    }
+}
+
+struct ScratchCanvas: View {
+    @Binding var blocks: [TextBlock]
+    var focusedBlock: FocusState<UUID?>.Binding
+
+    var body: some View {
+        ZStack(alignment: .topLeading) {
+            Color.clear
+                .contentShape(Rectangle())
+                .onTapGesture(coordinateSpace: .local) { location in
+                    let new = TextBlock(
+                        x: max(0, Double(location.x)),
+                        y: max(0, Double(location.y)),
+                        text: ""
+                    )
+                    blocks.append(new)
+                    focusedBlock.wrappedValue = new.id
+                }
+
+            ForEach($blocks) { $block in
+                BlockView(block: $block, focusedBlock: focusedBlock)
+            }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .clipped()
+    }
+}
+
+struct BlockView: View {
+    @Binding var block: TextBlock
+    var focusedBlock: FocusState<UUID?>.Binding
+
+    private static let blockWidth: CGFloat = 480
+    private static let blockFont: NSFont = .systemFont(ofSize: 15)
+
+    var body: some View {
+        TextEditor(text: $block.text)
+            .scrollContentBackground(.hidden)
+            .background(.clear)
+            .font(.system(size: 15))
+            .foregroundStyle(.primary)
+            .frame(width: Self.blockWidth, height: Self.height(for: block.text))
+            .focused(focusedBlock, equals: block.id)
+            .offset(x: CGFloat(block.x), y: CGFloat(block.y))
+    }
+
+    private static func height(for text: String) -> CGFloat {
+        let attr = NSAttributedString(string: text.isEmpty ? " " : text,
+                                      attributes: [.font: blockFont])
+        let rect = attr.boundingRect(
+            with: NSSize(width: blockWidth - 16, height: .greatestFiniteMagnitude),
+            options: [.usesLineFragmentOrigin, .usesFontLeading]
+        )
+        return max(26, ceil(rect.height) + 14)
     }
 }

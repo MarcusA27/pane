@@ -10,14 +10,7 @@ struct CanvasTextEditor: NSViewRepresentable {
     func makeCoordinator() -> Coordinator { Coordinator(self) }
 
     func makeNSView(context: Context) -> BlockContainerView {
-        let scrollView = NSTextView.scrollableTextView()
-        let placeholder = scrollView.documentView as! NSTextView
-        let textContainer = placeholder.textContainer!
-
-        let textView = CanvasTextView(frame: placeholder.frame, textContainer: textContainer)
-        textView.autoresizingMask = placeholder.autoresizingMask
-        scrollView.documentView = textView
-
+        let textView = CanvasTextView(frame: .zero)
         textView.delegate = context.coordinator
         textView.drawsBackground = false
         textView.backgroundColor = .clear
@@ -27,6 +20,10 @@ struct CanvasTextEditor: NSViewRepresentable {
         textView.insertionPointColor = .controlAccentColor
         textView.allowsUndo = true
         textView.textContainerInset = NSSize(width: 0, height: 4)
+        textView.isHorizontallyResizable = false
+        textView.isVerticallyResizable = false
+        textView.textContainer?.widthTracksTextView = true
+        textView.textContainer?.containerSize = NSSize(width: 0, height: CGFloat.greatestFiniteMagnitude)
         textView.string = text
 
         textView.onFocusChange = { [weak coord = context.coordinator] focused in
@@ -40,13 +37,7 @@ struct CanvasTextEditor: NSViewRepresentable {
             }
         }
 
-        scrollView.drawsBackground = false
-        scrollView.backgroundColor = .clear
-        scrollView.hasVerticalScroller = false
-        scrollView.hasHorizontalScroller = false
-        scrollView.borderType = .noBorder
-
-        let container = BlockContainerView(scrollView: scrollView, textView: textView)
+        let container = BlockContainerView(textView: textView)
         container.onDragChange = { [weak coord = context.coordinator] t in
             coord?.parent.onDragChange(t)
         }
@@ -86,7 +77,6 @@ struct CanvasTextEditor: NSViewRepresentable {
 }
 
 final class BlockContainerView: NSView {
-    let scrollView: NSScrollView
     let textView: CanvasTextView
 
     var onDragChange: ((CGSize) -> Void)?
@@ -96,18 +86,17 @@ final class BlockContainerView: NSView {
     private var isDragging = false
     private static let dragThreshold: CGFloat = 4
 
-    init(scrollView: NSScrollView, textView: CanvasTextView) {
-        self.scrollView = scrollView
+    init(textView: CanvasTextView) {
         self.textView = textView
         super.init(frame: .zero)
-        addSubview(scrollView)
+        addSubview(textView)
     }
 
     required init?(coder: NSCoder) { fatalError("not implemented") }
 
     override func layout() {
         super.layout()
-        scrollView.frame = bounds
+        textView.frame = bounds
     }
 
     override func hitTest(_ point: NSPoint) -> NSView? {

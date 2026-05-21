@@ -111,12 +111,9 @@ final class BlockContainerView: NSView {
     }
 
     override func hitTest(_ point: NSPoint) -> NSView? {
-        // When the block is focused, let normal hit testing through so the
-        // text view receives clicks/drags for cursor and text selection.
         if textView.window?.firstResponder === textView {
             return super.hitTest(point)
         }
-        // Otherwise, intercept all mouse events at the container level.
         let localPoint = superview?.convert(point, to: self) ?? point
         return bounds.contains(localPoint) ? self : nil
     }

@@ -51,8 +51,6 @@ struct WindowConfigurator: NSViewRepresentable {
             window.styleMask.insert(.fullSizeContentView)
             window.isMovableByWindowBackground = false
             window.hasShadow = true
-            window.makeKeyAndOrderFront(nil)
-            NSApp.activate(ignoringOtherApps: true)
         }
         return view
     }

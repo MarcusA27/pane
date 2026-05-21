@@ -95,8 +95,8 @@ struct Sidebar: View {
                 .help("New Note  ⌘N")
             }
             .padding(.horizontal, 18)
-            .padding(.top, 44)
-            .padding(.bottom, 14)
+            .padding(.top, 14)
+            .padding(.bottom, 12)
 
             ScrollView {
                 LazyVStack(spacing: 4) {
@@ -116,6 +116,7 @@ struct Sidebar: View {
                 .padding(.horizontal, 10)
                 .padding(.bottom, 16)
             }
+            .scrollIndicators(.never)
             .scrollContentBackground(.hidden)
         }
     }
@@ -249,24 +250,21 @@ struct ScratchCanvas: View {
     @Binding var focusedBlock: UUID?
 
     var body: some View {
-        ZStack(alignment: .topLeading) {
-            Color.clear
-                .contentShape(Rectangle())
-                .onTapGesture(coordinateSpace: .local) { location in
-                    let new = TextBlock(
-                        x: max(0, Double(location.x)),
-                        y: max(0, Double(location.y)),
-                        text: ""
-                    )
-                    blocks.append(new)
-                    focusedBlock = new.id
-                }
+        GeometryReader { _ in
+            ZStack(alignment: .topLeading) {
+                Color.clear
+                    .contentShape(Rectangle())
+                    .onTapGesture(coordinateSpace: .local) { location in
+                        let new = TextBlock(x: Double(location.x), y: Double(location.y))
+                        blocks.append(new)
+                        focusedBlock = new.id
+                    }
 
-            ForEach($blocks) { $block in
-                BlockView(block: $block, focusedBlock: $focusedBlock)
+                ForEach($blocks) { $block in
+                    BlockView(block: $block, focusedBlock: $focusedBlock)
+                }
             }
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
         .clipped()
     }
 }
@@ -276,8 +274,8 @@ struct BlockView: View {
     @Binding var focusedBlock: UUID?
     @State private var activeDrag: CGSize = .zero
 
-    private static let blockWidth: CGFloat = 480
-    private static let blockFont: NSFont = .systemFont(ofSize: 15)
+    static let blockWidth: CGFloat = 480
+    static let blockFont: NSFont = .systemFont(ofSize: 15)
 
     var body: some View {
         CanvasTextEditor(
@@ -296,8 +294,8 @@ struct BlockView: View {
                 activeDrag = translation
             },
             onDragEnd: { translation in
-                block.x = max(0, block.x + Double(translation.width))
-                block.y = max(0, block.y + Double(translation.height))
+                block.x += Double(translation.width)
+                block.y += Double(translation.height)
                 activeDrag = .zero
             }
         )

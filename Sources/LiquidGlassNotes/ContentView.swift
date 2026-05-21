@@ -250,18 +250,23 @@ struct ScratchCanvas: View {
     @Binding var focusedBlock: UUID?
 
     var body: some View {
-        GeometryReader { _ in
+        GeometryReader { geo in
             ZStack(alignment: .topLeading) {
                 Color.clear
                     .contentShape(Rectangle())
                     .onTapGesture(coordinateSpace: .local) { location in
-                        let new = TextBlock(x: Double(location.x), y: Double(location.y))
+                        let maxX = max(0, Double(geo.size.width - BlockView.minBlockWidth))
+                        let maxY = max(0, Double(geo.size.height - BlockView.minBlockHeight))
+                        let new = TextBlock(
+                            x: min(max(0, Double(location.x)), maxX),
+                            y: min(max(0, Double(location.y)), maxY)
+                        )
                         blocks.append(new)
                         focusedBlock = new.id
                     }
 
                 ForEach($blocks) { $block in
-                    BlockView(block: $block, focusedBlock: $focusedBlock)
+                    BlockView(block: $block, focusedBlock: $focusedBlock, canvasSize: geo.size)
                 }
             }
         }
@@ -272,13 +277,23 @@ struct ScratchCanvas: View {
 struct BlockView: View {
     @Binding var block: TextBlock
     @Binding var focusedBlock: UUID?
+    let canvasSize: CGSize
     @State private var activeDrag: CGSize = .zero
 
-    static let blockWidth: CGFloat = 480
+    static let minBlockWidth: CGFloat = 60
+    static let preferredMaxWidth: CGFloat = 480
+    static let minBlockHeight: CGFloat = 26
+    static let canvasDragMargin: CGFloat = 40
     static let blockFont: NSFont = .systemFont(ofSize: 15)
+    private static let lineFragmentPadding: CGFloat = 5
+    private static let verticalInset: CGFloat = 4
 
     var body: some View {
-        CanvasTextEditor(
+        let size = Self.size(for: block.text, canvas: canvasSize)
+        let maxX = max(0, Double(canvasSize.width) - Double(size.width))
+        let maxY = max(0, Double(canvasSize.height) - Double(size.height))
+
+        return CanvasTextEditor(
             text: $block.text,
             isFocused: Binding(
                 get: { focusedBlock == block.id },
@@ -291,15 +306,22 @@ struct BlockView: View {
                 }
             ),
             onDragChange: { translation in
-                activeDrag = translation
+                let proposedX = block.x + Double(translation.width)
+                let proposedY = block.y + Double(translation.height)
+                let clampedX = min(max(0, proposedX), maxX)
+                let clampedY = min(max(0, proposedY), maxY)
+                activeDrag = CGSize(
+                    width: CGFloat(clampedX - block.x),
+                    height: CGFloat(clampedY - block.y)
+                )
             },
             onDragEnd: { translation in
-                block.x += Double(translation.width)
-                block.y += Double(translation.height)
+                block.x = min(max(0, block.x + Double(translation.width)), maxX)
+                block.y = min(max(0, block.y + Double(translation.height)), maxY)
                 activeDrag = .zero
             }
         )
-        .frame(width: Self.blockWidth, height: Self.height(for: block.text))
+        .frame(width: size.width, height: size.height)
         .offset(
             x: CGFloat(block.x) + activeDrag.width,
             y: CGFloat(block.y) + activeDrag.height
@@ -307,13 +329,25 @@ struct BlockView: View {
         .zIndex(activeDrag != .zero ? 1 : 0)
     }
 
-    private static func height(for text: String) -> CGFloat {
-        let attr = NSAttributedString(string: text.isEmpty ? " " : text,
-                                      attributes: [.font: blockFont])
-        let rect = attr.boundingRect(
-            with: NSSize(width: blockWidth - 16, height: .greatestFiniteMagnitude),
+    static func size(for text: String, canvas: CGSize) -> CGSize {
+        let measureText = text.isEmpty ? " " : text
+        let attr = NSAttributedString(string: measureText, attributes: [.font: blockFont])
+
+        let maxAllowedBlockWidth = max(minBlockWidth,
+                                       min(preferredMaxWidth, canvas.width - canvasDragMargin))
+        let maxContentWidth = maxAllowedBlockWidth - 2 * lineFragmentPadding
+
+        let bounded = attr.boundingRect(
+            with: NSSize(width: maxContentWidth, height: .greatestFiniteMagnitude),
             options: [.usesLineFragmentOrigin, .usesFontLeading]
         )
-        return max(26, ceil(rect.height) + 14)
+
+        let contentWidth = ceil(bounded.width)
+        let contentHeight = ceil(bounded.height)
+
+        let blockWidth = max(minBlockWidth, contentWidth + 2 * lineFragmentPadding)
+        let blockHeight = max(minBlockHeight, contentHeight + 2 * verticalInset)
+
+        return CGSize(width: blockWidth, height: blockHeight)
     }
 }

@@ -49,7 +49,7 @@ struct WindowConfigurator: NSViewRepresentable {
             window.titlebarAppearsTransparent = true
             window.titleVisibility = .hidden
             window.styleMask.insert(.fullSizeContentView)
-            window.isMovableByWindowBackground = false
+            window.isMovableByWindowBackground = true
             window.hasShadow = true
             window.makeKeyAndOrderFront(nil)
             NSApp.activate(ignoringOtherApps: true)

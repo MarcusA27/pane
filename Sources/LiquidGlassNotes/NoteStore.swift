@@ -1,31 +1,30 @@
 import Foundation
 import SwiftUI
 
-struct TextBlock: Identifiable, Codable, Hashable {
-    var id: UUID = UUID()
-    var x: Double
-    var y: Double
-    var text: String = ""
-}
-
 struct Note: Identifiable, Codable, Hashable {
     var id: UUID = UUID()
     var title: String = ""
-    var blocks: [TextBlock] = []
+    var body: String = ""
     var updatedAt: Date = Date()
 
     init(id: UUID = UUID(),
          title: String = "",
-         blocks: [TextBlock] = [],
+         body: String = "",
          updatedAt: Date = Date()) {
         self.id = id
         self.title = title
-        self.blocks = blocks
+        self.body = body
         self.updatedAt = updatedAt
     }
 
-    enum CodingKeys: String, CodingKey {
-        case id, title, blocks, updatedAt, body
+    private enum CodingKeys: String, CodingKey {
+        case id, title, body, updatedAt, blocks
+    }
+
+    private struct LegacyBlock: Decodable {
+        var x: Double
+        var y: Double
+        var text: String
     }
 
     init(from decoder: Decoder) throws {
@@ -33,13 +32,15 @@ struct Note: Identifiable, Codable, Hashable {
         self.id = try c.decodeIfPresent(UUID.self, forKey: .id) ?? UUID()
         self.title = try c.decodeIfPresent(String.self, forKey: .title) ?? ""
         self.updatedAt = try c.decodeIfPresent(Date.self, forKey: .updatedAt) ?? Date()
-        if let blocks = try c.decodeIfPresent([TextBlock].self, forKey: .blocks) {
-            self.blocks = blocks
-        } else if let body = try c.decodeIfPresent(String.self, forKey: .body),
-                  !body.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            self.blocks = [TextBlock(x: 0, y: 0, text: body)]
+        if let body = try c.decodeIfPresent(String.self, forKey: .body) {
+            self.body = body
+        } else if let blocks = try c.decodeIfPresent([LegacyBlock].self, forKey: .blocks) {
+            self.body = blocks
+                .sorted { ($0.y, $0.x) < ($1.y, $1.x) }
+                .map(\.text)
+                .joined(separator: "\n\n")
         } else {
-            self.blocks = []
+            self.body = ""
         }
     }
 
@@ -47,27 +48,27 @@ struct Note: Identifiable, Codable, Hashable {
         var c = encoder.container(keyedBy: CodingKeys.self)
         try c.encode(id, forKey: .id)
         try c.encode(title, forKey: .title)
-        try c.encode(blocks, forKey: .blocks)
+        try c.encode(body, forKey: .body)
         try c.encode(updatedAt, forKey: .updatedAt)
-    }
-
-    private var orderedLines: [String] {
-        blocks
-            .sorted { ($0.y, $0.x) < ($1.y, $1.x) }
-            .flatMap { $0.text.split(whereSeparator: \.isNewline).map(String.init) }
-            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
-            .filter { !$0.isEmpty }
     }
 
     var displayTitle: String {
         let trimmed = title.trimmingCharacters(in: .whitespacesAndNewlines)
         if !trimmed.isEmpty { return trimmed }
-        return orderedLines.first ?? "New Note"
+        let firstLine = body
+            .split(whereSeparator: \.isNewline)
+            .first.map(String.init) ?? ""
+        let trim = firstLine.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trim.isEmpty ? "New Note" : trim
     }
 
     var snippet: String {
         let titleEmpty = title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-        return orderedLines.dropFirst(titleEmpty ? 1 : 0).first ?? ""
+        let lines = body
+            .split(whereSeparator: \.isNewline)
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+        return lines.dropFirst(titleEmpty ? 1 : 0).first ?? ""
     }
 }
 
@@ -93,10 +94,13 @@ final class NoteStore: ObservableObject {
         if notes.isEmpty {
             let welcome = Note(
                 title: "Welcome",
-                blocks: [
-                    TextBlock(x: 0, y: 0, text: "A scratchpad — click anywhere to start typing."),
-                    TextBlock(x: 0, y: 60, text: "Empty blocks vanish on their own.")
-                ]
+                body: """
+                A simple, glassy place for thoughts.
+
+                ⌘N for a new note  ·  ⌘0 to toggle the sidebar
+
+                Start typing here, or hit ⌘N to begin.
+                """
             )
             notes = [welcome]
             selection = welcome.id

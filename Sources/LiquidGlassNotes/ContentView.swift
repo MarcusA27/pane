@@ -227,12 +227,20 @@ struct Editor: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
-            TextField(titleFocused ? "Title" : "", text: $note.title)
-                .textFieldStyle(.plain)
-                .font(.system(size: 30, weight: .bold, design: .rounded))
-                .foregroundStyle(.primary)
-                .focused($titleFocused)
-                .padding(.leading, titleLeadingOffset)
+            ZStack(alignment: .leading) {
+                Color.clear
+                    .frame(height: 36)
+                    .contentShape(Rectangle())
+                    .onTapGesture { titleFocused = true }
+
+                TextField("Title", text: $note.title)
+                    .textFieldStyle(.plain)
+                    .font(.system(size: 30, weight: .bold, design: .rounded))
+                    .foregroundStyle(.primary)
+                    .focused($titleFocused)
+                    .opacity(titleFocused || !note.title.isEmpty ? 1 : 0)
+            }
+            .padding(.leading, titleLeadingOffset)
 
             ScratchCanvas(blocks: $note.blocks, focusedBlock: $focusedBlock)
         }

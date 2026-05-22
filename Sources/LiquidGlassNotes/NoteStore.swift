@@ -8,24 +8,32 @@ struct TextBlock: Identifiable, Codable, Hashable {
     var text: String = ""
 }
 
+struct Stroke: Identifiable, Codable, Hashable {
+    var id: UUID = UUID()
+    var points: [CGPoint]
+}
+
 struct Note: Identifiable, Codable, Hashable {
     var id: UUID = UUID()
     var title: String = ""
     var blocks: [TextBlock] = []
+    var annotations: [Stroke] = []
     var updatedAt: Date = Date()
 
     init(id: UUID = UUID(),
          title: String = "",
          blocks: [TextBlock] = [],
+         annotations: [Stroke] = [],
          updatedAt: Date = Date()) {
         self.id = id
         self.title = title
         self.blocks = blocks
+        self.annotations = annotations
         self.updatedAt = updatedAt
     }
 
     private enum CodingKeys: String, CodingKey {
-        case id, title, blocks, updatedAt, body
+        case id, title, blocks, annotations, updatedAt, body
     }
 
     init(from decoder: Decoder) throws {
@@ -33,6 +41,7 @@ struct Note: Identifiable, Codable, Hashable {
         self.id = try c.decodeIfPresent(UUID.self, forKey: .id) ?? UUID()
         self.title = try c.decodeIfPresent(String.self, forKey: .title) ?? ""
         self.updatedAt = try c.decodeIfPresent(Date.self, forKey: .updatedAt) ?? Date()
+        self.annotations = try c.decodeIfPresent([Stroke].self, forKey: .annotations) ?? []
         if let blocks = try c.decodeIfPresent([TextBlock].self, forKey: .blocks) {
             self.blocks = blocks
         } else if let body = try c.decodeIfPresent(String.self, forKey: .body),
@@ -48,6 +57,7 @@ struct Note: Identifiable, Codable, Hashable {
         try c.encode(id, forKey: .id)
         try c.encode(title, forKey: .title)
         try c.encode(blocks, forKey: .blocks)
+        try c.encode(annotations, forKey: .annotations)
         try c.encode(updatedAt, forKey: .updatedAt)
     }
 

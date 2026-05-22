@@ -8,16 +8,23 @@ struct ContentView: View {
     @State private var sidebarVisible = true
 
     var body: some View {
-        HStack(spacing: 0) {
-            if sidebarVisible {
-                Sidebar()
-                    .frame(width: sidebarWidth)
-                    .transition(.move(edge: .leading).combined(with: .opacity))
-                DividerLine()
-                    .transition(.opacity)
-            }
-            Detail()
+        ZStack(alignment: .topLeading) {
+            Detail(titleLeadingOffset: sidebarVisible ? sidebarWidth : 0)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
+
+            if sidebarVisible {
+                HStack(spacing: 0) {
+                    Sidebar()
+                        .frame(width: sidebarWidth)
+                        .background(
+                            VisualEffectView(material: .menu, blendingMode: .behindWindow)
+                                .ignoresSafeArea()
+                        )
+                    DividerLine()
+                }
+                .frame(maxHeight: .infinity)
+                .transition(.move(edge: .leading).combined(with: .opacity))
+            }
         }
         .animation(.easeInOut(duration: 0.22), value: sidebarVisible)
         .overlay(alignment: .bottomLeading) {
@@ -172,13 +179,14 @@ struct NoteRow: View {
 }
 
 struct Detail: View {
+    let titleLeadingOffset: CGFloat
     @EnvironmentObject var store: NoteStore
 
     var body: some View {
         ZStack {
             Color.clear
             if let id = store.selection, let binding = store.binding(for: id) {
-                Editor(note: binding)
+                Editor(note: binding, titleLeadingOffset: titleLeadingOffset)
                     .id(id)
             } else {
                 EmptyStatePrompt()
@@ -213,6 +221,7 @@ struct EmptyStatePrompt: View {
 
 struct Editor: View {
     @Binding var note: Note
+    let titleLeadingOffset: CGFloat
     @State private var focusedBlock: UUID?
     @FocusState private var titleFocused: Bool
 
@@ -223,6 +232,7 @@ struct Editor: View {
                 .font(.system(size: 30, weight: .bold, design: .rounded))
                 .foregroundStyle(.primary)
                 .focused($titleFocused)
+                .padding(.leading, titleLeadingOffset)
 
             ScratchCanvas(blocks: $note.blocks, focusedBlock: $focusedBlock)
         }

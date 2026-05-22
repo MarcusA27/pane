@@ -15,7 +15,7 @@ struct ContentView: View {
 
     var body: some View {
         ZStack(alignment: .topLeading) {
-            Detail(titleLeadingOffset: sidebarVisible ? sidebarWidth : 0)
+            Detail()
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
 
             if sidebarVisible {
@@ -185,14 +185,13 @@ struct NoteRow: View {
 }
 
 struct Detail: View {
-    let titleLeadingOffset: CGFloat
     @EnvironmentObject var store: NoteStore
 
     var body: some View {
         ZStack {
             Color.clear
             if let id = store.selection, let binding = store.binding(for: id) {
-                Editor(note: binding, titleLeadingOffset: titleLeadingOffset)
+                Editor(note: binding)
                     .id(id)
             } else {
                 EmptyStatePrompt()
@@ -227,41 +226,19 @@ struct EmptyStatePrompt: View {
 
 struct Editor: View {
     @Binding var note: Note
-    let titleLeadingOffset: CGFloat
     @State private var focusedBlock: UUID?
     @State private var tool: Tool = .text
-    @FocusState private var titleFocused: Bool
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            ZStack(alignment: .leading) {
-                Color.clear
-                    .frame(height: 36)
-                    .contentShape(Rectangle())
-                    .onTapGesture {
-                        guard tool == .text else { return }
-                        titleFocused = true
-                    }
-
-                TextField("Title", text: $note.title)
-                    .textFieldStyle(.plain)
-                    .font(.system(size: 30, weight: .bold, design: .rounded))
-                    .foregroundStyle(.primary)
-                    .focused($titleFocused)
-                    .opacity(titleFocused || !note.title.isEmpty ? 1 : 0)
-            }
-            .padding(.leading, titleLeadingOffset)
-
-            ScratchCanvas(
-                blocks: $note.blocks,
-                annotations: $note.annotations,
-                focusedBlock: $focusedBlock,
-                tool: tool
-            )
-        }
+        ScratchCanvas(
+            blocks: $note.blocks,
+            annotations: $note.annotations,
+            focusedBlock: $focusedBlock,
+            tool: tool
+        )
         .padding(.leading, 38)
         .padding(.trailing, 4)
-        .padding(.top, 52)
+        .padding(.top, 24)
         .padding(.bottom, 24)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .overlay(alignment: .topTrailing) {
@@ -290,7 +267,6 @@ struct Editor: View {
         .onChange(of: tool) { _, newTool in
             if newTool != .text {
                 focusedBlock = nil
-                titleFocused = false
             }
         }
     }

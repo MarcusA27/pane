@@ -15,7 +15,7 @@ struct CanvasTextEditor: NSViewRepresentable {
         textView.drawsBackground = false
         textView.backgroundColor = .clear
         textView.isRichText = false
-        textView.font = .systemFont(ofSize: 15)
+        textView.font = BlockView.blockFont
         textView.textColor = NSColor(white: 0.12, alpha: 1)
         textView.insertionPointColor = .controlAccentColor
         textView.allowsUndo = true
@@ -61,6 +61,10 @@ struct CanvasTextEditor: NSViewRepresentable {
         if isFocused && !isFirstResponder {
             DispatchQueue.main.async {
                 textView.window?.makeFirstResponder(textView)
+            }
+        } else if !isFocused && isFirstResponder {
+            DispatchQueue.main.async {
+                textView.window?.makeFirstResponder(nil)
             }
         }
     }

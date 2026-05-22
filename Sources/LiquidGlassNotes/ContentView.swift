@@ -3,6 +3,11 @@ import AppKit
 
 private let sidebarWidth: CGFloat = 282
 
+enum Tool: Equatable {
+    case text
+    case draw
+}
+
 struct ContentView: View {
     @EnvironmentObject var store: NoteStore
     @State private var sidebarVisible = true
@@ -223,6 +228,7 @@ struct Editor: View {
     @Binding var note: Note
     let titleLeadingOffset: CGFloat
     @State private var focusedBlock: UUID?
+    @State private var tool: Tool = .text
     @FocusState private var titleFocused: Bool
 
     var body: some View {
@@ -231,7 +237,10 @@ struct Editor: View {
                 Color.clear
                     .frame(height: 36)
                     .contentShape(Rectangle())
-                    .onTapGesture { titleFocused = true }
+                    .onTapGesture {
+                        guard tool == .text else { return }
+                        titleFocused = true
+                    }
 
                 TextField("Title", text: $note.title)
                     .textFieldStyle(.plain)
@@ -242,7 +251,12 @@ struct Editor: View {
             }
             .padding(.leading, titleLeadingOffset)
 
-            ScratchCanvas(blocks: $note.blocks, focusedBlock: $focusedBlock)
+            ScratchCanvas(
+                blocks: $note.blocks,
+                annotations: $note.annotations,
+                focusedBlock: $focusedBlock,
+                tool: tool
+            )
         }
         .padding(.leading, 38)
         .padding(.trailing, 4)
@@ -250,11 +264,16 @@ struct Editor: View {
         .padding(.bottom, 24)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .overlay(alignment: .topTrailing) {
-            Text(note.updatedAt, format: .dateTime.weekday(.wide).month().day().year().hour().minute())
-                .font(.system(size: 11, weight: .medium))
-                .foregroundStyle(.secondary)
-                .padding(.trailing, 38)
-                .padding(.top, 20)
+            HStack(spacing: 12) {
+                ToolButton(systemName: "pencil.tip", isActive: tool == .draw) {
+                    tool = (tool == .draw) ? .text : .draw
+                }
+                Text(note.updatedAt, format: .dateTime.weekday(.wide).month().day().year().hour().minute())
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundStyle(.secondary)
+            }
+            .padding(.trailing, 38)
+            .padding(.top, 20)
         }
         .onChange(of: focusedBlock) { oldID, _ in
             guard let oldID,
@@ -263,12 +282,43 @@ struct Editor: View {
             else { return }
             note.blocks.removeAll { $0.id == oldID }
         }
+        .onChange(of: tool) { _, newTool in
+            if newTool != .text {
+                focusedBlock = nil
+                titleFocused = false
+            }
+        }
+    }
+}
+
+struct ToolButton: View {
+    let systemName: String
+    let isActive: Bool
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            Image(systemName: systemName)
+                .font(.system(size: 13, weight: .medium))
+                .foregroundStyle(isActive ? .primary : .secondary)
+                .frame(width: 26, height: 26)
+                .background(
+                    Circle()
+                        .fill(isActive ? .white.opacity(0.18) : .clear)
+                        .overlay(
+                            Circle().strokeBorder(.white.opacity(isActive ? 0.3 : 0), lineWidth: 0.5)
+                        )
+                )
+        }
+        .buttonStyle(.plain)
     }
 }
 
 struct ScratchCanvas: View {
     @Binding var blocks: [TextBlock]
+    @Binding var annotations: [Stroke]
     @Binding var focusedBlock: UUID?
+    let tool: Tool
 
     var body: some View {
         GeometryReader { geo in
@@ -276,6 +326,7 @@ struct ScratchCanvas: View {
                 Color.clear
                     .contentShape(Rectangle())
                     .onTapGesture(coordinateSpace: .local) { location in
+                        guard tool == .text else { return }
                         let maxX = max(0, Double(geo.size.width - BlockView.minBlockWidth))
                         let maxY = max(0, Double(geo.size.height - BlockView.minBlockHeight))
                         let new = TextBlock(
@@ -289,9 +340,93 @@ struct ScratchCanvas: View {
                 ForEach($blocks) { $block in
                     BlockView(block: $block, focusedBlock: $focusedBlock, canvasSize: geo.size)
                 }
+                .allowsHitTesting(tool == .text)
+
+                AnnotationsLayer(annotations: $annotations, tool: tool)
             }
         }
         .clipped()
+    }
+}
+
+struct AnnotationsLayer: View {
+    @Binding var annotations: [Stroke]
+    let tool: Tool
+    @State private var currentStroke: [CGPoint] = []
+
+    private static let strokeColor = Color(white: 0.18)
+
+    var body: some View {
+        Canvas { context, _ in
+            for stroke in annotations {
+                Self.drawPencil(&context, points: stroke.points, seed: stroke.id.hashValue)
+            }
+            if !currentStroke.isEmpty {
+                Self.drawPencil(&context, points: currentStroke, seed: 0)
+            }
+        }
+        .allowsHitTesting(tool != .text)
+        .gesture(
+            DragGesture(minimumDistance: 0, coordinateSpace: .local)
+                .onChanged { value in
+                    guard tool == .draw else { return }
+                    currentStroke.append(value.location)
+                }
+                .onEnded { _ in
+                    defer { currentStroke = [] }
+                    guard tool == .draw, currentStroke.count > 0 else { return }
+                    annotations.append(Stroke(points: currentStroke))
+                }
+        )
+    }
+
+    private static func drawPencil(_ context: inout GraphicsContext, points: [CGPoint], seed: Int) {
+        let perturbed = perturb(points, seed: seed, amount: 1.0)
+        let path = smoothPath(perturbed)
+        context.stroke(
+            path,
+            with: .color(strokeColor.opacity(0.78)),
+            style: StrokeStyle(lineWidth: 1.4, lineCap: .round, lineJoin: .round, dash: [2.5, 0.35])
+        )
+    }
+
+    private static func perturb(_ points: [CGPoint], seed: Int, amount: Double) -> [CGPoint] {
+        points.enumerated().map { i, p in
+            let dx = (noise(seed: seed &+ i &* 2) - 0.5) * amount
+            let dy = (noise(seed: seed &+ i &* 2 &+ 1) - 0.5) * amount
+            return CGPoint(x: p.x + dx, y: p.y + dy)
+        }
+    }
+
+    private static func noise(seed: Int) -> Double {
+        var s = UInt64(bitPattern: Int64(seed)) &+ 0x123456789ABCDEF
+        s = (s ^ (s >> 33)) &* 0xff51afd7ed558ccd
+        s = (s ^ (s >> 33)) &* 0xc4ceb9fe1a85ec53
+        s = s ^ (s >> 33)
+        return Double(s & 0xFFFFFFFF) / Double(UInt32.max)
+    }
+
+    private static func smoothPath(_ points: [CGPoint]) -> Path {
+        Path { path in
+            guard let first = points.first else { return }
+            path.move(to: first)
+            if points.count < 3 {
+                for p in points.dropFirst() {
+                    path.addLine(to: p)
+                }
+                return
+            }
+            for i in 1..<(points.count - 1) {
+                let mid = CGPoint(
+                    x: (points[i].x + points[i + 1].x) / 2,
+                    y: (points[i].y + points[i + 1].y) / 2
+                )
+                path.addQuadCurve(to: mid, control: points[i])
+            }
+            if let last = points.last {
+                path.addLine(to: last)
+            }
+        }
     }
 }
 

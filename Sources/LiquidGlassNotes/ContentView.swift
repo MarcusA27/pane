@@ -262,13 +262,46 @@ struct Editor: View {
     let chromeVisible: Bool
     @State private var focusedBlock: UUID?
     @State private var tool: Tool = .text
+    @State private var isPlaying: Bool = false
+    @State private var pendingTextRunTasks: [UUID: Task<Void, Never>] = [:]
+    @State private var lastRecordedText: [UUID: String] = [:]
 
     var body: some View {
+        Group {
+            if isPlaying {
+                NotePlayerView(note: note) {
+                    isPlaying = false
+                }
+                .transition(.opacity)
+            } else {
+                editingView
+                    .transition(.opacity)
+            }
+        }
+        .animation(.easeInOut(duration: 0.18), value: isPlaying)
+    }
+
+    @ViewBuilder
+    private var editingView: some View {
         ScratchCanvas(
             blocks: $note.blocks,
             annotations: $note.annotations,
             focusedBlock: $focusedBlock,
-            tool: tool
+            tool: tool,
+            onBlockCreated: { id, x, y in
+                record(.blockCreated(blockID: id, x: x, y: y, at: Date()))
+                lastRecordedText[id] = ""
+            },
+            onStrokeAdded: { stroke in
+                record(.strokeAdded(stroke: stroke, at: Date()))
+            },
+            onStrokeErased: { id in
+                record(.strokeErased(strokeID: id, at: Date()))
+            },
+            onBlockTextChanged: scheduleTextRun,
+            onBlockMoved: { id, x, y in
+                record(.blockMoved(blockID: id, x: x, y: y, at: Date()))
+            }
         )
         .padding(.leading, 38)
         .padding(.trailing, 4)
@@ -286,6 +319,19 @@ struct Editor: View {
                     ToolButton(systemName: "eraser", isActive: tool == .erase) {
                         tool = (tool == .erase) ? .text : .erase
                     }
+                    if note.hasPlayback {
+                        Button {
+                            flushAllPendingRuns()
+                            isPlaying = true
+                        } label: {
+                            Image(systemName: "play.fill")
+                                .font(.system(size: 12, weight: .medium))
+                                .foregroundStyle(.primary)
+                                .frame(width: 26, height: 26)
+                        }
+                        .buttonStyle(.plain)
+                        .help("Play timelapse")
+                    }
                     Text(note.updatedAt, format: .dateTime.weekday(.wide).month().day().year().hour().minute())
                         .font(.system(size: 11, weight: .medium))
                         .foregroundStyle(.secondary)
@@ -297,19 +343,65 @@ struct Editor: View {
             }
         }
         .onChange(of: focusedBlock) { oldID, _ in
-            guard let oldID,
-                  let block = note.blocks.first(where: { $0.id == oldID }),
-                  block.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-            else { return }
-            note.blocks.removeAll { $0.id == oldID }
+            handleFocusChange(oldID: oldID)
         }
         .onChange(of: tool) { _, newTool in
             if newTool != .text {
                 focusedBlock = nil
             }
         }
+        .onDisappear {
+            flushAllPendingRuns()
+        }
+    }
+
+    private func record(_ event: EditEvent) {
+        note.history.append(event)
+    }
+
+    private func scheduleTextRun(blockID: UUID, text: String) {
+        pendingTextRunTasks[blockID]?.cancel()
+        pendingTextRunTasks[blockID] = Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 500_000_000)
+            guard !Task.isCancelled else { return }
+            commitTextRun(blockID: blockID, text: text)
+            pendingTextRunTasks[blockID] = nil
+        }
+    }
+
+    private func commitTextRun(blockID: UUID, text: String) {
+        if lastRecordedText[blockID] == text { return }
+        lastRecordedText[blockID] = text
+        record(.blockTextRun(blockID: blockID, text: text, at: Date()))
+    }
+
+    private func handleFocusChange(oldID: UUID?) {
+        guard let oldID else { return }
+        pendingTextRunTasks[oldID]?.cancel()
+        pendingTextRunTasks[oldID] = nil
+
+        if let block = note.blocks.first(where: { $0.id == oldID }) {
+            if block.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                note.blocks.removeAll { $0.id == oldID }
+                lastRecordedText[oldID] = nil
+                record(.blockDeleted(blockID: oldID, at: Date()))
+            } else {
+                commitTextRun(blockID: oldID, text: block.text)
+            }
+        }
+    }
+
+    private func flushAllPendingRuns() {
+        for (id, task) in pendingTextRunTasks {
+            task.cancel()
+            if let block = note.blocks.first(where: { $0.id == id }) {
+                commitTextRun(blockID: id, text: block.text)
+            }
+        }
+        pendingTextRunTasks.removeAll()
     }
 }
+
 
 struct ToolButton: View {
     let systemName: String
@@ -339,6 +431,11 @@ struct ScratchCanvas: View {
     @Binding var annotations: [Stroke]
     @Binding var focusedBlock: UUID?
     let tool: Tool
+    let onBlockCreated: (UUID, Double, Double) -> Void
+    let onStrokeAdded: (Stroke) -> Void
+    let onStrokeErased: (UUID) -> Void
+    let onBlockTextChanged: (UUID, String) -> Void
+    let onBlockMoved: (UUID, Double, Double) -> Void
 
     @State private var currentStroke: [CGPoint] = []
     @State private var dragState: DragState = .idle
@@ -359,14 +456,21 @@ struct ScratchCanvas: View {
                     .gesture(emptySpaceGesture(geo: geo))
 
                 ForEach($blocks) { $block in
-                    BlockView(block: $block, focusedBlock: $focusedBlock, canvasSize: geo.size)
+                    BlockView(
+                        block: $block,
+                        focusedBlock: $focusedBlock,
+                        canvasSize: geo.size,
+                        onTextChanged: onBlockTextChanged,
+                        onMoved: onBlockMoved
+                    )
                 }
                 .allowsHitTesting(tool == .text)
 
                 AnnotationsLayer(
                     annotations: $annotations,
                     currentStroke: currentStroke,
-                    tool: tool
+                    tool: tool,
+                    onStrokeErased: onStrokeErased
                 )
             }
         }
@@ -398,15 +502,17 @@ struct ScratchCanvas: View {
                 case .pending(let start):
                     let maxX = max(0, Double(geo.size.width - BlockView.minBlockWidth))
                     let maxY = max(0, Double(geo.size.height - BlockView.minBlockHeight))
-                    let new = TextBlock(
-                        x: min(max(0, Double(start.x)), maxX),
-                        y: min(max(0, Double(start.y)), maxY)
-                    )
+                    let x = min(max(0, Double(start.x)), maxX)
+                    let y = min(max(0, Double(start.y)), maxY)
+                    let new = TextBlock(x: x, y: y)
                     blocks.append(new)
                     focusedBlock = new.id
+                    onBlockCreated(new.id, x, y)
                 case .drawing:
                     if currentStroke.count > 1 {
-                        annotations.append(Stroke(points: currentStroke))
+                        let stroke = Stroke(points: currentStroke)
+                        annotations.append(stroke)
+                        onStrokeAdded(stroke)
                     }
                     currentStroke = []
                 case .idle:
@@ -420,6 +526,7 @@ struct AnnotationsLayer: View {
     @Binding var annotations: [Stroke]
     let currentStroke: [CGPoint]
     let tool: Tool
+    let onStrokeErased: (UUID) -> Void
 
     private static let strokeColor = Color(white: 0.18)
     private static let eraseRadius: CGFloat = 14
@@ -444,10 +551,16 @@ struct AnnotationsLayer: View {
     }
 
     private func eraseNear(_ point: CGPoint) {
-        annotations.removeAll { stroke in
+        let erased = annotations.filter { stroke in
             stroke.points.contains { p in
                 hypot(p.x - point.x, p.y - point.y) < Self.eraseRadius
             }
+        }
+        guard !erased.isEmpty else { return }
+        let erasedIDs = Set(erased.map(\.id))
+        annotations.removeAll { erasedIDs.contains($0.id) }
+        for id in erasedIDs {
+            onStrokeErased(id)
         }
     }
 
@@ -505,6 +618,8 @@ struct BlockView: View {
     @Binding var block: TextBlock
     @Binding var focusedBlock: UUID?
     let canvasSize: CGSize
+    let onTextChanged: (UUID, String) -> Void
+    let onMoved: (UUID, Double, Double) -> Void
     @State private var activeDrag: CGSize = .zero
 
     static let minBlockWidth: CGFloat = 60
@@ -544,9 +659,15 @@ struct BlockView: View {
                 )
             },
             onDragEnd: { translation in
-                block.x = min(max(0, block.x + Double(translation.width)), maxX)
-                block.y = min(max(0, block.y + Double(translation.height)), maxY)
+                let newX = min(max(0, block.x + Double(translation.width)), maxX)
+                let newY = min(max(0, block.y + Double(translation.height)), maxY)
+                let moved = newX != block.x || newY != block.y
+                block.x = newX
+                block.y = newY
                 activeDrag = .zero
+                if moved {
+                    onMoved(blockID, newX, newY)
+                }
             }
         )
         .frame(width: size.width, height: size.height)
@@ -556,6 +677,9 @@ struct BlockView: View {
             y: CGFloat(block.y) + activeDrag.height
         )
         .zIndex(activeDrag != .zero ? 1 : 0)
+        .onChange(of: block.text) { _, newText in
+            onTextChanged(blockID, newText)
+        }
     }
 
     static func size(for text: String, canvas: CGSize) -> CGSize {

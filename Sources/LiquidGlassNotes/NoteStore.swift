@@ -13,27 +13,51 @@ struct Stroke: Identifiable, Codable, Hashable {
     var points: [CGPoint]
 }
 
+enum EditEvent: Codable, Hashable {
+    case blockCreated(blockID: UUID, x: Double, y: Double, at: Date)
+    case blockTextRun(blockID: UUID, text: String, at: Date)
+    case blockMoved(blockID: UUID, x: Double, y: Double, at: Date)
+    case blockDeleted(blockID: UUID, at: Date)
+    case strokeAdded(stroke: Stroke, at: Date)
+    case strokeErased(strokeID: UUID, at: Date)
+
+    var timestamp: Date {
+        switch self {
+        case .blockCreated(_, _, _, let at),
+             .blockTextRun(_, _, let at),
+             .blockMoved(_, _, _, let at),
+             .blockDeleted(_, let at),
+             .strokeAdded(_, let at),
+             .strokeErased(_, let at):
+            return at
+        }
+    }
+}
+
 struct Note: Identifiable, Codable, Hashable {
     var id: UUID = UUID()
     var title: String = ""
     var blocks: [TextBlock] = []
     var annotations: [Stroke] = []
+    var history: [EditEvent] = []
     var updatedAt: Date = Date()
 
     init(id: UUID = UUID(),
          title: String = "",
          blocks: [TextBlock] = [],
          annotations: [Stroke] = [],
+         history: [EditEvent] = [],
          updatedAt: Date = Date()) {
         self.id = id
         self.title = title
         self.blocks = blocks
         self.annotations = annotations
+        self.history = history
         self.updatedAt = updatedAt
     }
 
     private enum CodingKeys: String, CodingKey {
-        case id, title, blocks, annotations, updatedAt, body
+        case id, title, blocks, annotations, history, updatedAt, body
     }
 
     init(from decoder: Decoder) throws {
@@ -42,6 +66,7 @@ struct Note: Identifiable, Codable, Hashable {
         self.title = try c.decodeIfPresent(String.self, forKey: .title) ?? ""
         self.updatedAt = try c.decodeIfPresent(Date.self, forKey: .updatedAt) ?? Date()
         self.annotations = try c.decodeIfPresent([Stroke].self, forKey: .annotations) ?? []
+        self.history = try c.decodeIfPresent([EditEvent].self, forKey: .history) ?? []
         if let blocks = try c.decodeIfPresent([TextBlock].self, forKey: .blocks) {
             self.blocks = blocks
         } else if let body = try c.decodeIfPresent(String.self, forKey: .body),
@@ -58,7 +83,12 @@ struct Note: Identifiable, Codable, Hashable {
         try c.encode(title, forKey: .title)
         try c.encode(blocks, forKey: .blocks)
         try c.encode(annotations, forKey: .annotations)
+        try c.encode(history, forKey: .history)
         try c.encode(updatedAt, forKey: .updatedAt)
+    }
+
+    var hasPlayback: Bool {
+        !history.isEmpty
     }
 
     private var orderedLines: [String] {

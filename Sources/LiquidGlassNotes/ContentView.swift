@@ -473,6 +473,7 @@ struct BlockView: View {
             }
         )
         .frame(width: size.width, height: size.height)
+        .shadow(color: .black.opacity(0.18), radius: 1.2, x: 0.5, y: 1.2)
         .offset(
             x: CGFloat(block.x) + activeDrag.width,
             y: CGFloat(block.y) + activeDrag.height

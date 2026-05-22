@@ -16,7 +16,7 @@ struct CanvasTextEditor: NSViewRepresentable {
         textView.backgroundColor = .clear
         textView.isRichText = false
         textView.font = .systemFont(ofSize: 15)
-        textView.textColor = .labelColor
+        textView.textColor = NSColor(white: 0.12, alpha: 1)
         textView.insertionPointColor = .controlAccentColor
         textView.allowsUndo = true
         textView.textContainerInset = NSSize(width: 0, height: 4)

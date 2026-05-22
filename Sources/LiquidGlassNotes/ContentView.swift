@@ -11,15 +11,18 @@ enum Tool: Equatable {
 struct ContentView: View {
     @EnvironmentObject var store: NoteStore
     @State private var sidebarVisible = true
+    @State private var fanOpen = false
+
+    private var sidebarShown: Bool { sidebarVisible && !fanOpen }
 
     var body: some View {
         ZStack(alignment: .topLeading) {
-            Detail()
+            Detail(chromeVisible: !fanOpen)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
 
-            if sidebarVisible {
+            if sidebarShown {
                 HStack(spacing: 0) {
-                    Sidebar()
+                    Sidebar(fanOpen: $fanOpen)
                         .frame(width: sidebarWidth)
                         .background(
                             VisualEffectView(material: .menu, blendingMode: .behindWindow)
@@ -29,17 +32,40 @@ struct ContentView: View {
                 }
                 .frame(maxHeight: .infinity)
                 .transition(.move(edge: .leading).combined(with: .opacity))
+                .zIndex(2)
+            }
+
+            if fanOpen {
+                NoteFanOverlay(
+                    fanOpen: $fanOpen,
+                    leadingInset: 0
+                )
+                .transition(.opacity)
+                .zIndex(1)
             }
         }
-        .animation(.easeInOut(duration: 0.22), value: sidebarVisible)
+        .animation(.easeInOut(duration: 0.28), value: sidebarShown)
+        .animation(.spring(response: 0.5, dampingFraction: 0.82), value: fanOpen)
         .overlay(alignment: .bottomLeading) {
-            GlassCircleButton {
-                sidebarVisible.toggle()
-            } label: {
-                Image(systemName: "sidebar.left")
+            HStack(spacing: 10) {
+                if !fanOpen {
+                    GlassCircleButton {
+                        sidebarVisible.toggle()
+                    } label: {
+                        Image(systemName: "sidebar.left")
+                    }
+                    .keyboardShortcut("0", modifiers: .command)
+                    .help("Toggle Sidebar  ⌘0")
+                }
+
+                GlassCircleButton {
+                    fanOpen.toggle()
+                } label: {
+                    Image(systemName: fanOpen ? "xmark" : "rectangle.stack")
+                }
+                .help(fanOpen ? "Close fan  ⌘F" : "Browse notes as a fan  ⌘F")
+                .keyboardShortcut("f", modifiers: .command)
             }
-            .keyboardShortcut("0", modifiers: .command)
-            .help("Toggle Sidebar  ⌘0")
             .padding(.leading, 14)
             .padding(.bottom, 14)
         }
@@ -91,6 +117,7 @@ struct DividerLine: View {
 
 struct Sidebar: View {
     @EnvironmentObject var store: NoteStore
+    @Binding var fanOpen: Bool
 
     var body: some View {
         VStack(spacing: 0) {
@@ -100,6 +127,7 @@ struct Sidebar: View {
                     .foregroundStyle(.primary)
                 Spacer()
                 GlassCircleButton {
+                    if fanOpen { fanOpen = false }
                     store.addNote()
                 } label: {
                     Image(systemName: "square.and.pencil")
@@ -110,26 +138,31 @@ struct Sidebar: View {
             .padding(.top, 14)
             .padding(.bottom, 12)
 
-            ScrollView {
-                LazyVStack(spacing: 4) {
-                    ForEach(store.sortedNotes) { note in
-                        NoteRow(note: note, isSelected: store.selection == note.id)
-                            .contentShape(Rectangle())
-                            .onTapGesture { store.selection = note.id }
-                            .contextMenu {
-                                Button(role: .destructive) {
-                                    store.delete(note.id)
-                                } label: {
-                                    Label("Delete", systemImage: "trash")
+            if !fanOpen {
+                ScrollView {
+                    LazyVStack(spacing: 4) {
+                        ForEach(store.sortedNotes) { note in
+                            NoteRow(note: note, isSelected: store.selection == note.id)
+                                .contentShape(Rectangle())
+                                .onTapGesture { store.selection = note.id }
+                                .contextMenu {
+                                    Button(role: .destructive) {
+                                        store.delete(note.id)
+                                    } label: {
+                                        Label("Delete", systemImage: "trash")
+                                    }
                                 }
-                            }
+                        }
                     }
+                    .padding(.horizontal, 10)
+                    .padding(.bottom, 16)
                 }
-                .padding(.horizontal, 10)
-                .padding(.bottom, 16)
+                .scrollIndicators(.never)
+                .scrollContentBackground(.hidden)
+                .transition(.opacity)
+            } else {
+                Spacer(minLength: 0)
             }
-            .scrollIndicators(.never)
-            .scrollContentBackground(.hidden)
         }
     }
 }
@@ -185,12 +218,13 @@ struct NoteRow: View {
 
 struct Detail: View {
     @EnvironmentObject var store: NoteStore
+    let chromeVisible: Bool
 
     var body: some View {
         ZStack {
             Color.clear
             if let id = store.selection, let binding = store.binding(for: id) {
-                Editor(note: binding)
+                Editor(note: binding, chromeVisible: chromeVisible)
                     .id(id)
             } else {
                 EmptyStatePrompt()
@@ -225,6 +259,7 @@ struct EmptyStatePrompt: View {
 
 struct Editor: View {
     @Binding var note: Note
+    let chromeVisible: Bool
     @State private var focusedBlock: UUID?
     @State private var tool: Tool = .text
 
@@ -241,22 +276,25 @@ struct Editor: View {
         .padding(.bottom, 24)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .overlay(alignment: .topTrailing) {
-            HStack(spacing: 10) {
-                Image(systemName: "pencil.tip")
-                    .font(.system(size: 13, weight: .medium))
-                    .foregroundStyle(.secondary)
-                    .frame(width: 26, height: 26)
-                    .help("Drag from empty space to draw")
-                ToolButton(systemName: "eraser", isActive: tool == .erase) {
-                    tool = (tool == .erase) ? .text : .erase
+            if chromeVisible {
+                HStack(spacing: 10) {
+                    Image(systemName: "pencil.tip")
+                        .font(.system(size: 13, weight: .medium))
+                        .foregroundStyle(.secondary)
+                        .frame(width: 26, height: 26)
+                        .help("Drag from empty space to draw")
+                    ToolButton(systemName: "eraser", isActive: tool == .erase) {
+                        tool = (tool == .erase) ? .text : .erase
+                    }
+                    Text(note.updatedAt, format: .dateTime.weekday(.wide).month().day().year().hour().minute())
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundStyle(.secondary)
+                        .padding(.leading, 2)
                 }
-                Text(note.updatedAt, format: .dateTime.weekday(.wide).month().day().year().hour().minute())
-                    .font(.system(size: 11, weight: .medium))
-                    .foregroundStyle(.secondary)
-                    .padding(.leading, 2)
+                .padding(.trailing, 38)
+                .padding(.top, 20)
+                .transition(.opacity)
             }
-            .padding(.trailing, 38)
-            .padding(.top, 20)
         }
         .onChange(of: focusedBlock) { oldID, _ in
             guard let oldID,

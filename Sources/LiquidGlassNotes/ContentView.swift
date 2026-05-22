@@ -5,7 +5,6 @@ private let sidebarWidth: CGFloat = 282
 
 enum Tool: Equatable {
     case text
-    case draw
     case erase
 }
 
@@ -243,9 +242,11 @@ struct Editor: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .overlay(alignment: .topTrailing) {
             HStack(spacing: 10) {
-                ToolButton(systemName: "pencil.tip", isActive: tool == .draw) {
-                    tool = (tool == .draw) ? .text : .draw
-                }
+                Image(systemName: "pencil.tip")
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundStyle(.secondary)
+                    .frame(width: 26, height: 26)
+                    .help("Drag from empty space to draw")
                 ToolButton(systemName: "eraser", isActive: tool == .erase) {
                     tool = (tool == .erase) ? .text : .erase
                 }
@@ -301,41 +302,89 @@ struct ScratchCanvas: View {
     @Binding var focusedBlock: UUID?
     let tool: Tool
 
+    @State private var currentStroke: [CGPoint] = []
+    @State private var dragState: DragState = .idle
+
+    private enum DragState {
+        case idle
+        case pending(start: CGPoint)
+        case drawing
+    }
+
+    private static let dragThreshold: CGFloat = 6
+
     var body: some View {
         GeometryReader { geo in
             ZStack(alignment: .topLeading) {
                 Color.clear
                     .contentShape(Rectangle())
-                    .onTapGesture(coordinateSpace: .local) { location in
-                        guard tool == .text else { return }
-                        let maxX = max(0, Double(geo.size.width - BlockView.minBlockWidth))
-                        let maxY = max(0, Double(geo.size.height - BlockView.minBlockHeight))
-                        let new = TextBlock(
-                            x: min(max(0, Double(location.x)), maxX),
-                            y: min(max(0, Double(location.y)), maxY)
-                        )
-                        blocks.append(new)
-                        focusedBlock = new.id
-                    }
+                    .gesture(emptySpaceGesture(geo: geo))
 
                 ForEach($blocks) { $block in
                     BlockView(block: $block, focusedBlock: $focusedBlock, canvasSize: geo.size)
                 }
                 .allowsHitTesting(tool == .text)
 
-                AnnotationsLayer(annotations: $annotations, tool: tool)
+                AnnotationsLayer(
+                    annotations: $annotations,
+                    currentStroke: currentStroke,
+                    tool: tool
+                )
             }
         }
         .clipped()
+    }
+
+    private func emptySpaceGesture(geo: GeometryProxy) -> some Gesture {
+        DragGesture(minimumDistance: 0, coordinateSpace: .local)
+            .onChanged { value in
+                guard tool == .text else { return }
+                switch dragState {
+                case .idle:
+                    dragState = .pending(start: value.startLocation)
+                case .pending(let start):
+                    let dx = value.location.x - start.x
+                    let dy = value.location.y - start.y
+                    if hypot(dx, dy) > Self.dragThreshold {
+                        dragState = .drawing
+                        currentStroke = [start, value.location]
+                    }
+                case .drawing:
+                    currentStroke.append(value.location)
+                }
+            }
+            .onEnded { value in
+                defer { dragState = .idle }
+                guard tool == .text else { return }
+                switch dragState {
+                case .pending(let start):
+                    let maxX = max(0, Double(geo.size.width - BlockView.minBlockWidth))
+                    let maxY = max(0, Double(geo.size.height - BlockView.minBlockHeight))
+                    let new = TextBlock(
+                        x: min(max(0, Double(start.x)), maxX),
+                        y: min(max(0, Double(start.y)), maxY)
+                    )
+                    blocks.append(new)
+                    focusedBlock = new.id
+                case .drawing:
+                    if currentStroke.count > 1 {
+                        annotations.append(Stroke(points: currentStroke))
+                    }
+                    currentStroke = []
+                case .idle:
+                    break
+                }
+            }
     }
 }
 
 struct AnnotationsLayer: View {
     @Binding var annotations: [Stroke]
+    let currentStroke: [CGPoint]
     let tool: Tool
-    @State private var currentStroke: [CGPoint] = []
 
     private static let strokeColor = Color(white: 0.18)
+    private static let eraseRadius: CGFloat = 14
 
     var body: some View {
         Canvas { context, _ in
@@ -346,25 +395,15 @@ struct AnnotationsLayer: View {
                 Self.drawPencil(&context, points: currentStroke, seed: 0)
             }
         }
-        .allowsHitTesting(tool != .text)
+        .allowsHitTesting(tool == .erase)
         .gesture(
             DragGesture(minimumDistance: 0, coordinateSpace: .local)
                 .onChanged { value in
-                    switch tool {
-                    case .draw: currentStroke.append(value.location)
-                    case .erase: eraseNear(value.location)
-                    case .text: break
-                    }
-                }
-                .onEnded { _ in
-                    defer { currentStroke = [] }
-                    guard tool == .draw, currentStroke.count > 0 else { return }
-                    annotations.append(Stroke(points: currentStroke))
+                    guard tool == .erase else { return }
+                    eraseNear(value.location)
                 }
         )
     }
-
-    private static let eraseRadius: CGFloat = 14
 
     private func eraseNear(_ point: CGPoint) {
         annotations.removeAll { stroke in

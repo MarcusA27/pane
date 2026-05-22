@@ -1,8 +1,6 @@
 import SwiftUI
 import AppKit
 
-private let sidebarWidth: CGFloat = 282
-
 enum Tool: Equatable {
     case text
     case erase
@@ -10,37 +8,46 @@ enum Tool: Equatable {
 
 struct ContentView: View {
     @EnvironmentObject var store: NoteStore
-    @State private var sidebarVisible = true
+    @State private var dropsOpen = false
+    @State private var trashOpen = false
 
     var body: some View {
-        ZStack(alignment: .topLeading) {
-            Detail()
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-
-            if sidebarVisible {
-                HStack(spacing: 0) {
-                    Sidebar()
-                        .frame(width: sidebarWidth)
-                        .background(
-                            VisualEffectView(material: .menu, blendingMode: .behindWindow)
-                                .ignoresSafeArea()
-                        )
-                    DividerLine()
-                }
-                .frame(maxHeight: .infinity)
-                .transition(.move(edge: .leading).combined(with: .opacity))
-                .zIndex(2)
+        ZStack {
+            if trashOpen {
+                TrashView()
+                    .transition(.opacity)
+            } else if dropsOpen {
+                GlassDropsView(dropsOpen: $dropsOpen)
+                    .transition(.opacity)
+            } else {
+                Detail()
+                    .transition(.opacity)
             }
         }
-        .animation(.easeInOut(duration: 0.28), value: sidebarVisible)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .animation(.easeInOut(duration: 0.32), value: dropsOpen)
+        .animation(.easeInOut(duration: 0.28), value: trashOpen)
         .overlay(alignment: .bottomLeading) {
             GlassCircleButton {
-                sidebarVisible.toggle()
+                if trashOpen {
+                    trashOpen = false
+                } else if dropsOpen {
+                    trashOpen = true
+                } else {
+                    dropsOpen = true
+                }
             } label: {
-                Image(systemName: "sidebar.left")
+                Image(systemName:
+                    trashOpen ? "xmark" :
+                    dropsOpen ? "trash" :
+                    "circle.hexagongrid")
             }
             .keyboardShortcut("0", modifiers: .command)
-            .help("Toggle Sidebar  ⌘0")
+            .help(
+                trashOpen ? "Back to overview  ⌘0" :
+                dropsOpen ? "View deleted notes  ⌘0" :
+                "Show note overview  ⌘0"
+            )
             .padding(.leading, 14)
             .padding(.bottom, 14)
         }
@@ -72,115 +79,6 @@ struct GlassCircleButton<Label: View>: View {
                 )
         }
         .buttonStyle(.plain)
-    }
-}
-
-struct DividerLine: View {
-    var body: some View {
-        Rectangle()
-            .fill(.white.opacity(0.08))
-            .frame(width: 0.5)
-            .frame(maxHeight: .infinity)
-            .overlay(
-                Rectangle()
-                    .fill(.black.opacity(0.18))
-                    .frame(width: 0.5)
-                    .blendMode(.multiply)
-            )
-    }
-}
-
-struct Sidebar: View {
-    @EnvironmentObject var store: NoteStore
-
-    var body: some View {
-        VStack(spacing: 0) {
-            HStack(alignment: .firstTextBaseline) {
-                Text("Notes")
-                    .font(.system(size: 22, weight: .semibold, design: .rounded))
-                    .foregroundStyle(.primary)
-                Spacer()
-                GlassCircleButton {
-                    store.addNote()
-                } label: {
-                    Image(systemName: "square.and.pencil")
-                }
-                .help("New Note  ⌘N")
-            }
-            .padding(.horizontal, 18)
-            .padding(.top, 14)
-            .padding(.bottom, 12)
-
-            ScrollView {
-                LazyVStack(spacing: 4) {
-                    ForEach(store.sortedNotes) { note in
-                        NoteRow(note: note, isSelected: store.selection == note.id)
-                            .contentShape(Rectangle())
-                            .onTapGesture { store.selection = note.id }
-                            .contextMenu {
-                                Button(role: .destructive) {
-                                    store.delete(note.id)
-                                } label: {
-                                    Label("Delete", systemImage: "trash")
-                                }
-                            }
-                    }
-                }
-                .padding(.horizontal, 10)
-                .padding(.bottom, 16)
-            }
-            .scrollIndicators(.never)
-            .scrollContentBackground(.hidden)
-        }
-    }
-}
-
-struct NoteRow: View {
-    let note: Note
-    let isSelected: Bool
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 5) {
-            Text(note.displayTitle)
-                .font(.system(size: 13.5, weight: .semibold))
-                .foregroundStyle(.primary)
-                .lineLimit(1)
-            HStack(spacing: 6) {
-                Text(note.updatedAt, format: .relative(presentation: .named, unitsStyle: .abbreviated))
-                    .font(.system(size: 11, weight: .medium))
-                    .foregroundStyle(.secondary)
-                if !note.snippet.isEmpty {
-                    Text("·")
-                        .font(.system(size: 11))
-                        .foregroundStyle(.tertiary)
-                    Text(note.snippet)
-                        .font(.system(size: 11))
-                        .foregroundStyle(.tertiary)
-                        .lineLimit(1)
-                }
-            }
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.vertical, 9)
-        .padding(.horizontal, 12)
-        .background {
-            if isSelected {
-                RoundedRectangle(cornerRadius: 11, style: .continuous)
-                    .fill(.white.opacity(0.22))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 11, style: .continuous)
-                            .strokeBorder(
-                                LinearGradient(
-                                    colors: [.white.opacity(0.55), .white.opacity(0.08)],
-                                    startPoint: .topLeading, endPoint: .bottomTrailing
-                                ),
-                                lineWidth: 0.6
-                            )
-                    )
-                    .shadow(color: .black.opacity(0.10), radius: 8, x: 0, y: 3)
-            }
-        }
-        .animation(.easeOut(duration: 0.15), value: isSelected)
     }
 }
 

@@ -41,23 +41,29 @@ struct Note: Identifiable, Codable, Hashable {
     var annotations: [Stroke] = []
     var history: [EditEvent] = []
     var updatedAt: Date = Date()
+    var orbPosition: CGPoint? = nil
+    var deletedAt: Date? = nil
 
     init(id: UUID = UUID(),
          title: String = "",
          blocks: [TextBlock] = [],
          annotations: [Stroke] = [],
          history: [EditEvent] = [],
-         updatedAt: Date = Date()) {
+         updatedAt: Date = Date(),
+         orbPosition: CGPoint? = nil,
+         deletedAt: Date? = nil) {
         self.id = id
         self.title = title
         self.blocks = blocks
         self.annotations = annotations
         self.history = history
         self.updatedAt = updatedAt
+        self.orbPosition = orbPosition
+        self.deletedAt = deletedAt
     }
 
     private enum CodingKeys: String, CodingKey {
-        case id, title, blocks, annotations, history, updatedAt, body
+        case id, title, blocks, annotations, history, updatedAt, body, orbPosition, deletedAt
     }
 
     init(from decoder: Decoder) throws {
@@ -67,6 +73,8 @@ struct Note: Identifiable, Codable, Hashable {
         self.updatedAt = try c.decodeIfPresent(Date.self, forKey: .updatedAt) ?? Date()
         self.annotations = try c.decodeIfPresent([Stroke].self, forKey: .annotations) ?? []
         self.history = try c.decodeIfPresent([EditEvent].self, forKey: .history) ?? []
+        self.orbPosition = try c.decodeIfPresent(CGPoint.self, forKey: .orbPosition)
+        self.deletedAt = try c.decodeIfPresent(Date.self, forKey: .deletedAt)
         if let blocks = try c.decodeIfPresent([TextBlock].self, forKey: .blocks) {
             self.blocks = blocks
         } else if let body = try c.decodeIfPresent(String.self, forKey: .body),
@@ -85,6 +93,8 @@ struct Note: Identifiable, Codable, Hashable {
         try c.encode(annotations, forKey: .annotations)
         try c.encode(history, forKey: .history)
         try c.encode(updatedAt, forKey: .updatedAt)
+        try c.encodeIfPresent(orbPosition, forKey: .orbPosition)
+        try c.encodeIfPresent(deletedAt, forKey: .deletedAt)
     }
 
     var hasPlayback: Bool {
@@ -148,20 +158,54 @@ final class NoteStore: ObservableObject {
     }
 
     var sortedNotes: [Note] {
-        notes.sorted { $0.updatedAt > $1.updatedAt }
+        notes.filter { $0.deletedAt == nil }.sorted { $0.updatedAt > $1.updatedAt }
     }
 
-    func addNote() {
-        let note = Note()
+    var deletedSortedNotes: [Note] {
+        notes
+            .filter { $0.deletedAt != nil }
+            .sorted { ($0.deletedAt ?? .distantPast) > ($1.deletedAt ?? .distantPast) }
+    }
+
+    @discardableResult
+    func addNote(orbPosition: CGPoint? = nil) -> Note.ID {
+        var note = Note()
+        note.orbPosition = orbPosition
         notes.insert(note, at: 0)
         selection = note.id
         persistNow()
+        return note.id
     }
 
-    func delete(_ id: Note.ID) {
-        notes.removeAll { $0.id == id }
-        if selection == id { selection = sortedNotes.first?.id }
-        persistNow()
+    func softDelete(noteID: Note.ID) {
+        guard let idx = notes.firstIndex(where: { $0.id == noteID }) else { return }
+        notes[idx].deletedAt = Date()
+        if selection == noteID { selection = sortedNotes.first?.id }
+        scheduleSave()
+    }
+
+    func restore(noteID: Note.ID) {
+        guard let idx = notes.firstIndex(where: { $0.id == noteID }) else { return }
+        notes[idx].deletedAt = nil
+        scheduleSave()
+    }
+
+    func permanentlyDelete(noteID: Note.ID) {
+        notes.removeAll { $0.id == noteID }
+        if selection == noteID { selection = sortedNotes.first?.id }
+        scheduleSave()
+    }
+
+    func setOrbPosition(noteID: Note.ID, position: CGPoint) {
+        guard let idx = notes.firstIndex(where: { $0.id == noteID }) else { return }
+        notes[idx].orbPosition = position
+        scheduleSave()
+    }
+
+    func setTitle(noteID: Note.ID, title: String) {
+        guard let idx = notes.firstIndex(where: { $0.id == noteID }) else { return }
+        notes[idx].title = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        scheduleSave()
     }
 
     func binding(for id: Note.ID) -> Binding<Note>? {

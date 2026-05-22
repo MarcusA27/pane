@@ -6,6 +6,7 @@ private let sidebarWidth: CGFloat = 282
 enum Tool: Equatable {
     case text
     case draw
+    case erase
 }
 
 struct ContentView: View {
@@ -264,13 +265,17 @@ struct Editor: View {
         .padding(.bottom, 24)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .overlay(alignment: .topTrailing) {
-            HStack(spacing: 12) {
+            HStack(spacing: 10) {
                 ToolButton(systemName: "pencil.tip", isActive: tool == .draw) {
                     tool = (tool == .draw) ? .text : .draw
+                }
+                ToolButton(systemName: "eraser", isActive: tool == .erase) {
+                    tool = (tool == .erase) ? .text : .erase
                 }
                 Text(note.updatedAt, format: .dateTime.weekday(.wide).month().day().year().hour().minute())
                     .font(.system(size: 11, weight: .medium))
                     .foregroundStyle(.secondary)
+                    .padding(.leading, 2)
             }
             .padding(.trailing, 38)
             .padding(.top, 20)
@@ -369,8 +374,11 @@ struct AnnotationsLayer: View {
         .gesture(
             DragGesture(minimumDistance: 0, coordinateSpace: .local)
                 .onChanged { value in
-                    guard tool == .draw else { return }
-                    currentStroke.append(value.location)
+                    switch tool {
+                    case .draw: currentStroke.append(value.location)
+                    case .erase: eraseNear(value.location)
+                    case .text: break
+                    }
                 }
                 .onEnded { _ in
                     defer { currentStroke = [] }
@@ -378,6 +386,16 @@ struct AnnotationsLayer: View {
                     annotations.append(Stroke(points: currentStroke))
                 }
         )
+    }
+
+    private static let eraseRadius: CGFloat = 14
+
+    private func eraseNear(_ point: CGPoint) {
+        annotations.removeAll { stroke in
+            stroke.points.contains { p in
+                hypot(p.x - point.x, p.y - point.y) < Self.eraseRadius
+            }
+        }
     }
 
     private static func drawPencil(_ context: inout GraphicsContext, points: [CGPoint], seed: Int) {

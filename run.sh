@@ -13,11 +13,17 @@ BIN_PATH="$(swift build -c "$CONFIG" --show-bin-path)"
 APP_DIR="$BIN_PATH/LiquidGlassNotes.app"
 CONTENTS="$APP_DIR/Contents"
 MACOS="$CONTENTS/MacOS"
+RESOURCES="$CONTENTS/Resources"
 
 rm -rf "$APP_DIR"
-mkdir -p "$MACOS"
+mkdir -p "$MACOS" "$RESOURCES"
 
 cp "$BIN_PATH/LiquidGlassNotes" "$MACOS/LiquidGlassNotes"
+
+ICNS_SRC="Assets/Icon/Pane.icns"
+if [ -f "$ICNS_SRC" ]; then
+    cp "$ICNS_SRC" "$RESOURCES/Pane.icns"
+fi
 
 cat > "$CONTENTS/Info.plist" <<'PLIST'
 <?xml version="1.0" encoding="UTF-8"?>
@@ -26,6 +32,8 @@ cat > "$CONTENTS/Info.plist" <<'PLIST'
 <dict>
     <key>CFBundleExecutable</key>
     <string>LiquidGlassNotes</string>
+    <key>CFBundleIconFile</key>
+    <string>Pane</string>
     <key>CFBundleIdentifier</key>
     <string>com.marcus.LiquidGlassNotes</string>
     <key>CFBundleName</key>

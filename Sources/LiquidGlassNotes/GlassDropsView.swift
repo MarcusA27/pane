@@ -26,6 +26,11 @@ struct GlassDropsView: View {
 
     var body: some View {
         GeometryReader { geo in
+            let trashScreenPoint = CGPoint(x: 29, y: geo.size.height - 29)
+            let deleteTarget = CGPoint(
+                x: trashScreenPoint.x - panOffset.width,
+                y: trashScreenPoint.y - panOffset.height
+            )
             ZStack {
                 ZStack {
                     ForEach(orbs) { orb in
@@ -33,7 +38,8 @@ struct GlassDropsView: View {
                             orb: orb,
                             isHovered: hoveredID == orb.id,
                             hideTitle: editingTitleID == orb.id,
-                            isDeleting: deletingIDs.contains(orb.id)
+                            isDeleting: deletingIDs.contains(orb.id),
+                            deleteTarget: deleteTarget
                         )
                         .allowsHitTesting(false)
                     }
@@ -191,10 +197,10 @@ struct GlassDropsView: View {
 
     private func performDelete(orbID: UUID) {
         menuOrbID = nil
-        withAnimation(.easeIn(duration: 0.4)) {
+        withAnimation(.timingCurve(0.55, 0, 0.95, 0.5, duration: 0.55)) {
             _ = deletingIDs.insert(orbID)
         }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.45) {
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.55) {
             store.softDelete(noteID: orbID)
             deletingIDs.remove(orbID)
         }
@@ -331,11 +337,13 @@ struct OrbView: View {
     let isHovered: Bool
     var hideTitle: Bool = false
     var isDeleting: Bool = false
+    var deleteTarget: CGPoint? = nil
 
     var body: some View {
-        let deathScale: CGFloat = isDeleting ? 0.15 : 1.0
+        let deathScale: CGFloat = isDeleting ? 0.06 : 1.0
         let r = orb.radius * (isHovered ? 1.04 : 1.0) * deathScale
         let baseOpacity = (0.50 + 0.50 * orb.recency) * (isDeleting ? 0 : 1)
+        let renderPosition = (isDeleting ? deleteTarget : nil) ?? orb.center
         let crispCore = isHovered
             ? 0.65
             : 0.32 + 0.30 * CGFloat(orb.recency)
@@ -381,9 +389,9 @@ struct OrbView: View {
                     .frame(maxWidth: r * 1.55)
             }
         }
-        .rotationEffect(.degrees(isDeleting ? 14 : 0))
-        .blur(radius: isDeleting ? 6 : 0)
-        .position(orb.center)
+        .rotationEffect(.degrees(isDeleting ? 35 : 0))
+        .blur(radius: isDeleting ? 3 : 0)
+        .position(renderPosition)
         .animation(.easeOut(duration: 0.16), value: isHovered)
     }
 }

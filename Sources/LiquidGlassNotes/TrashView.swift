@@ -6,28 +6,25 @@ struct TrashView: View {
 
     var body: some View {
         let deleted = store.deletedSortedNotes
-        ScrollView {
-            VStack(spacing: 0) {
-                Text("Deleted")
-                    .font(.system(size: 26, weight: .regular, design: .serif).italic())
-                    .foregroundStyle(Color(white: 0.12))
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.horizontal, 36)
-                    .padding(.top, 36)
-                    .padding(.bottom, 18)
+        ZStack(alignment: .topLeading) {
+            Text("Deleted")
+                .font(.system(size: 26, weight: .regular, design: .serif).italic())
+                .foregroundStyle(Color(white: 0.12))
+                .padding(.horizontal, 36)
+                .padding(.top, 36)
 
-                if deleted.isEmpty {
-                    VStack(spacing: 10) {
-                        Image(systemName: "trash")
-                            .font(.system(size: 32, weight: .light))
-                            .foregroundStyle(Color(white: 0.12).opacity(0.35))
-                        Text("Nothing here")
-                            .font(.system(size: 14, weight: .regular, design: .serif).italic())
-                            .foregroundStyle(Color(white: 0.12).opacity(0.5))
-                    }
-                    .frame(maxWidth: .infinity)
-                    .padding(.top, 80)
-                } else {
+            if deleted.isEmpty {
+                VStack(spacing: 10) {
+                    Image(systemName: "trash")
+                        .font(.system(size: 32, weight: .light))
+                        .foregroundStyle(Color(white: 0.12).opacity(0.35))
+                    Text("Nothing here")
+                        .font(.system(size: 14, weight: .regular, design: .serif).italic())
+                        .foregroundStyle(Color(white: 0.12).opacity(0.5))
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else {
+                ScrollView {
                     LazyVStack(spacing: 6) {
                         ForEach(deleted) { note in
                             TrashRow(
@@ -43,11 +40,12 @@ struct TrashView: View {
                         }
                     }
                     .padding(.horizontal, 28)
+                    .padding(.top, 90)
                     .padding(.bottom, 80)
                 }
+                .scrollIndicators(.never)
             }
         }
-        .scrollIndicators(.never)
     }
 }
 

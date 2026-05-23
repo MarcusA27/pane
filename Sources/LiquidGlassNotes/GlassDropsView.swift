@@ -19,6 +19,9 @@ struct GlassDropsView: View {
     @State private var menuOrbID: UUID? = nil
     @State private var menuPosition: CGPoint = .zero
     @State private var deletingIDs: Set<UUID> = []
+    @State private var searchQuery: String = ""
+    @State private var searchExpanded: Bool = false
+    @FocusState private var searchFocused: Bool
 
     enum PressMode {
         case none, orb, pan
@@ -31,15 +34,18 @@ struct GlassDropsView: View {
                 x: trashScreenPoint.x - panOffset.width,
                 y: trashScreenPoint.y - panOffset.height
             )
+            let searchActive = !trimmedQuery.isEmpty
             ZStack {
                 ZStack {
                     ForEach(orbs) { orb in
+                        let isMatch = !searchActive || matchesSearch(noteID: orb.noteID)
                         OrbView(
                             orb: orb,
-                            isHovered: hoveredID == orb.id,
+                            isHovered: hoveredID == orb.id || (searchActive && isMatch),
                             hideTitle: editingTitleID == orb.id,
                             isDeleting: deletingIDs.contains(orb.id),
-                            deleteTarget: deleteTarget
+                            deleteTarget: deleteTarget,
+                            dimmed: searchActive && !isMatch
                         )
                         .allowsHitTesting(false)
                     }
@@ -76,15 +82,31 @@ struct GlassDropsView: View {
                         .frame(width: orb.radius * 1.55)
                         .onSubmit { commitTitleEdit() }
                         .onExitCommand {
-                            editingTitleID = nil
-                            titleDraft = ""
-                            creatingNoteFlow = false
+                            if creatingNoteFlow {
+                                cancelCreatingNote()
+                            } else {
+                                editingTitleID = nil
+                                titleDraft = ""
+                            }
+                        }
+                        .onChange(of: titleFocused) { _, focused in
+                            guard !focused else { return }
+                            if creatingNoteFlow {
+                                cancelCreatingNote()
+                            } else if editingTitleID != nil {
+                                commitTitleEdit()
+                            }
                         }
                         .position(
                             x: orb.center.x + panOffset.width,
                             y: orb.center.y + panOffset.height
                         )
                 }
+
+                searchBar
+                    .padding(.trailing, 14)
+                    .padding(.bottom, 14)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
             }
             .onAppear { rebuild(size: geo.size) }
             .onChange(of: geo.size) { _, s in rebuild(size: s) }
@@ -93,12 +115,121 @@ struct GlassDropsView: View {
             }
         }
         .background(
-            Button("") { dismiss() }
-                .keyboardShortcut(.cancelAction)
-                .opacity(0)
-                .frame(width: 0, height: 0)
+            Button("") {
+                if !searchQuery.isEmpty {
+                    searchQuery = ""
+                } else {
+                    dismiss()
+                }
+            }
+            .keyboardShortcut(.cancelAction)
+            .opacity(0)
+            .frame(width: 0, height: 0)
+        )
+        .background(
+            Button("") {
+                if !searchExpanded {
+                    withAnimation(.easeOut(duration: 0.22)) {
+                        searchExpanded = true
+                    }
+                }
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+                    searchFocused = true
+                }
+            }
+            .keyboardShortcut("f", modifiers: .command)
+            .opacity(0)
+            .frame(width: 0, height: 0)
         )
         .animation(.easeOut(duration: 0.16), value: hoveredID)
+        .animation(.easeOut(duration: 0.18), value: trimmedQuery)
+    }
+
+    private var trimmedQuery: String {
+        searchQuery.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private func matchesSearch(noteID: UUID) -> Bool {
+        let q = trimmedQuery
+        guard !q.isEmpty else { return true }
+        guard let note = store.notes.first(where: { $0.id == noteID }) else { return false }
+        if note.title.localizedCaseInsensitiveContains(q) { return true }
+        for block in note.blocks where block.text.localizedCaseInsensitiveContains(q) {
+            return true
+        }
+        return false
+    }
+
+    @ViewBuilder
+    private var searchBar: some View {
+        let textTransition: AnyTransition = .asymmetric(
+            insertion: .opacity.animation(.easeOut(duration: 0.14).delay(0.12)),
+            removal: .opacity.animation(.easeOut(duration: 0.08))
+        )
+        HStack(spacing: 8) {
+            Image(systemName: "magnifyingglass")
+                .font(.system(size: 11, weight: .medium))
+                .foregroundStyle(Color(white: 0.12).opacity(0.55))
+            if searchExpanded {
+                TextField("Search", text: $searchQuery)
+                    .textFieldStyle(.plain)
+                    .font(.system(size: 13, weight: .regular, design: .serif).italic())
+                    .foregroundStyle(Color(white: 0.12))
+                    .focused($searchFocused)
+                    .onExitCommand {
+                        if !searchQuery.isEmpty {
+                            searchQuery = ""
+                        } else {
+                            searchFocused = false
+                        }
+                    }
+                    .transition(textTransition)
+                if !searchQuery.isEmpty {
+                    Button {
+                        searchQuery = ""
+                        searchFocused = true
+                    } label: {
+                        Image(systemName: "xmark.circle.fill")
+                            .font(.system(size: 11))
+                            .foregroundStyle(Color(white: 0.12).opacity(0.45))
+                    }
+                    .buttonStyle(.plain)
+                    .transition(textTransition)
+                }
+            }
+        }
+        .padding(.horizontal, searchExpanded ? 11 : 0)
+        .padding(.vertical, searchExpanded ? 5 : 0)
+        .frame(width: searchExpanded ? 190 : 28, height: 28)
+        .clipShape(Capsule())
+        .background(
+            Capsule()
+                .fill(.white.opacity(0.18))
+                .background(
+                    VisualEffectView(material: .menu, blendingMode: .behindWindow)
+                        .clipShape(Capsule())
+                )
+                .overlay(Capsule().strokeBorder(.white.opacity(0.30), lineWidth: 0.5))
+        )
+        .shadow(color: .black.opacity(0.12), radius: 10, x: 0, y: 4)
+        .contentShape(Capsule())
+        .onTapGesture {
+            if !searchExpanded {
+                withAnimation(.easeOut(duration: 0.22)) {
+                    searchExpanded = true
+                }
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+                    searchFocused = true
+                }
+            }
+        }
+        .onChange(of: searchFocused) { _, focused in
+            if !focused && searchQuery.isEmpty {
+                withAnimation(.easeOut(duration: 0.22)) {
+                    searchExpanded = false
+                }
+            }
+        }
     }
 
     private func commitTitleEdit() {
@@ -123,6 +254,13 @@ struct GlassDropsView: View {
     }
 
     private func handlePressStart(_ point: CGPoint) {
+        if creatingNoteFlow {
+            cancelCreatingNote()
+            menuOrbID = nil
+            pressedOrbID = nil
+            pressMode = .none
+            return
+        }
         commitTitleEdit()
         menuOrbID = nil
         if let hit = orbAt(worldPoint(from: point)) {
@@ -132,6 +270,14 @@ struct GlassDropsView: View {
             pressedOrbID = nil
             pressMode = .pan
         }
+    }
+
+    private func cancelCreatingNote() {
+        guard creatingNoteFlow, let id = editingTitleID else { return }
+        store.permanentlyDelete(noteID: id)
+        editingTitleID = nil
+        titleDraft = ""
+        creatingNoteFlow = false
     }
 
     private func handleDragDelta(_ delta: CGSize) {
@@ -338,17 +484,20 @@ struct OrbView: View {
     var hideTitle: Bool = false
     var isDeleting: Bool = false
     var deleteTarget: CGPoint? = nil
+    var dimmed: Bool = false
 
     var body: some View {
         let deathScale: CGFloat = isDeleting ? 0.06 : 1.0
         let r = orb.radius * (isHovered ? 1.04 : 1.0) * deathScale
-        let baseOpacity = (0.50 + 0.50 * orb.recency) * (isDeleting ? 0 : 1)
+        let dimFactor: Double = dimmed ? 0.32 : 1.0
+        let baseOpacity = (0.50 + 0.50 * orb.recency) * (isDeleting ? 0 : 1) * dimFactor
         let renderPosition = (isDeleting ? deleteTarget : nil) ?? orb.center
         let crispCore = isHovered
             ? 0.65
             : 0.32 + 0.30 * CGFloat(orb.recency)
         let midDensity = 0.55 + 0.30 * CGFloat(orb.recency)
-        let saturation = 0.92 + 0.40 * orb.recency
+        let saturation = (0.92 + 0.40 * orb.recency) * (dimmed ? 0.5 : 1.0)
+        let titleOpacity: Double = dimmed ? 0.28 : (isHovered ? 0.95 : 0.82)
 
         ZStack {
             VisualEffectView(material: .menu, blendingMode: .behindWindow)
@@ -369,7 +518,7 @@ struct OrbView: View {
                     )
                 )
                 .shadow(
-                    color: .black.opacity(isHovered ? 0.18 : 0.10),
+                    color: .black.opacity((isHovered ? 0.18 : 0.10) * (dimmed ? 0.4 : 1.0)),
                     radius: isHovered ? 9 : 5,
                     x: 0,
                     y: isHovered ? 4 : 2
@@ -382,7 +531,7 @@ struct OrbView: View {
                                   weight: .regular,
                                   design: .serif))
                     .italic()
-                    .foregroundStyle(Color(white: 0.12).opacity(isHovered ? 0.95 : 0.82))
+                    .foregroundStyle(Color(white: 0.12).opacity(titleOpacity))
                     .lineLimit(2)
                     .truncationMode(.tail)
                     .multilineTextAlignment(.center)
@@ -393,6 +542,7 @@ struct OrbView: View {
         .blur(radius: isDeleting ? 3 : 0)
         .position(renderPosition)
         .animation(.easeOut(duration: 0.16), value: isHovered)
+        .animation(.easeOut(duration: 0.18), value: dimmed)
     }
 }
 

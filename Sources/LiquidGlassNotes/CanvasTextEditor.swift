@@ -37,8 +37,9 @@ struct CanvasTextEditor: NSViewRepresentable {
             }
         }
 
-        context.coordinator.lastIsFocused = isFocused
-
+        // Leave lastIsFocused at its default of false so the first updateNSView
+        // call observes a true transition when a block is created focused
+        // (e.g. drag-to-create starts in focus).
         let container = BlockContainerView(textView: textView)
         container.onDragChange = { [weak coord = context.coordinator] t in
             coord?.parent.onDragChange(t)

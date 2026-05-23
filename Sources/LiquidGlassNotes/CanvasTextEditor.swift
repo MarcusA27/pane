@@ -37,6 +37,8 @@ struct CanvasTextEditor: NSViewRepresentable {
             }
         }
 
+        context.coordinator.lastIsFocused = isFocused
+
         let container = BlockContainerView(textView: textView)
         container.onDragChange = { [weak coord = context.coordinator] t in
             coord?.parent.onDragChange(t)
@@ -57,20 +59,28 @@ struct CanvasTextEditor: NSViewRepresentable {
             textView.selectedRanges = selected
         }
 
-        let isFirstResponder = textView.window?.firstResponder === textView
-        if isFocused && !isFirstResponder {
-            DispatchQueue.main.async {
-                textView.window?.makeFirstResponder(textView)
-            }
-        } else if !isFocused && isFirstResponder {
-            DispatchQueue.main.async {
-                textView.window?.makeFirstResponder(nil)
+        // Only push first-responder changes on actual transitions. Calling
+        // makeFirstResponder unconditionally from updateNSView causes AppKit's
+        // key-view loop to thrash, with SwiftUI re-rendering on every flip.
+        let coord = context.coordinator
+        if isFocused != coord.lastIsFocused {
+            coord.lastIsFocused = isFocused
+            let isFirstResponder = textView.window?.firstResponder === textView
+            if isFocused && !isFirstResponder {
+                DispatchQueue.main.async {
+                    textView.window?.makeFirstResponder(textView)
+                }
+            } else if !isFocused && isFirstResponder {
+                DispatchQueue.main.async {
+                    textView.window?.makeFirstResponder(nil)
+                }
             }
         }
     }
 
     final class Coordinator: NSObject, NSTextViewDelegate {
         var parent: CanvasTextEditor
+        var lastIsFocused: Bool = false
         init(_ parent: CanvasTextEditor) { self.parent = parent }
 
         func textDidChange(_ notification: Notification) {

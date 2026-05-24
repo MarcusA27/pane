@@ -135,9 +135,18 @@ final class NoteStore: ObservableObject {
                                    in: .userDomainMask,
                                    appropriateFor: nil,
                                    create: true)) ?? fm.homeDirectoryForCurrentUser
-        let dir = support.appendingPathComponent("LiquidGlassNotes", isDirectory: true)
+        let dir = support.appendingPathComponent("Pane", isDirectory: true)
         try? fm.createDirectory(at: dir, withIntermediateDirectories: true)
         self.fileURL = dir.appendingPathComponent("notes.json")
+
+        // Migrate from the pre-rename location for anyone upgrading from 0.1.0.
+        let legacyURL = support
+            .appendingPathComponent("LiquidGlassNotes", isDirectory: true)
+            .appendingPathComponent("notes.json")
+        if !fm.fileExists(atPath: fileURL.path),
+           fm.fileExists(atPath: legacyURL.path) {
+            try? fm.copyItem(at: legacyURL, to: fileURL)
+        }
 
         load()
         if notes.isEmpty {

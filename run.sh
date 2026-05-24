@@ -10,15 +10,15 @@ CONFIG="${CONFIG:-debug}"
 swift build -c "$CONFIG"
 
 BIN_PATH="$(swift build -c "$CONFIG" --show-bin-path)"
-APP_DIR="$BIN_PATH/LiquidGlassNotes.app"
+APP_DIR="$BIN_PATH/Pane.app"
 CONTENTS="$APP_DIR/Contents"
 MACOS="$CONTENTS/MacOS"
 RESOURCES="$CONTENTS/Resources"
 
-rm -rf "$APP_DIR"
+rm -rf "$APP_DIR" "$BIN_PATH/LiquidGlassNotes.app"
 mkdir -p "$MACOS" "$RESOURCES"
 
-cp "$BIN_PATH/LiquidGlassNotes" "$MACOS/LiquidGlassNotes"
+cp "$BIN_PATH/LiquidGlassNotes" "$MACOS/Pane"
 
 ICNS_SRC="Assets/Icon/Pane.icns"
 if [ -f "$ICNS_SRC" ]; then
@@ -31,15 +31,15 @@ cat > "$CONTENTS/Info.plist" <<'PLIST'
 <plist version="1.0">
 <dict>
     <key>CFBundleExecutable</key>
-    <string>LiquidGlassNotes</string>
+    <string>Pane</string>
     <key>CFBundleIconFile</key>
     <string>Pane</string>
     <key>CFBundleIdentifier</key>
     <string>com.marcus.LiquidGlassNotes</string>
     <key>CFBundleName</key>
-    <string>Liquid Glass Notes</string>
+    <string>Pane</string>
     <key>CFBundleDisplayName</key>
-    <string>Liquid Glass Notes</string>
+    <string>Pane</string>
     <key>CFBundlePackageType</key>
     <string>APPL</string>
     <key>CFBundleShortVersionString</key>

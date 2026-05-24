@@ -11,8 +11,25 @@ struct ContentView: View {
     @EnvironmentObject var store: NoteStore
     @State private var dropsOpen = false
     @State private var trashOpen = false
+    @AppStorage("hasSeenWelcome") private var hasSeenWelcome = false
 
     var body: some View {
+        ZStack {
+            appShell
+
+            if !hasSeenWelcome {
+                WelcomeView {
+                    withAnimation(.easeOut(duration: 0.45)) {
+                        hasSeenWelcome = true
+                    }
+                }
+                .transition(.opacity)
+            }
+        }
+        .animation(.easeOut(duration: 0.45), value: hasSeenWelcome)
+    }
+
+    private var appShell: some View {
         ZStack {
             if trashOpen {
                 TrashView()

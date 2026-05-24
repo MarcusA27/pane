@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<rss version="2.0" xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle" xmlns:dc="http://purl.org/dc/elements/1.1/">
+    <channel>
+        <title>Pane</title>
+        <link>https://marcusa27.github.io/pane/appcast.xml</link>
+        <description>Updates for Pane.</description>
+        <language>en</language>
+        <item>
+            <title>Version 0.1.2</title>
+            <pubDate>Sun, 24 May 2026 20:39:13 +0000</pubDate>
+            <sparkle:version>0.1.2</sparkle:version>
+            <sparkle:shortVersionString>0.1.2</sparkle:shortVersionString>
+            <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
+            <enclosure url="https://github.com/MarcusA27/pane/releases/download/v0.1.2/Pane-0.1.2.dmg"
+                       sparkle:edSignature="A4ooSa5t0V8jfF0abZGypPBHuvntxeKp2VPHjUF6+nEDxvrmFzA6az8ZNLlzPUhm0hYyJ9LNYFNvtiBOjDlXCw=="
+                       length="4099375"
+                       type="application/octet-stream" />
+        </item>
+    </channel>
+</rss>

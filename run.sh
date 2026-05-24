@@ -15,10 +15,17 @@ CONTENTS="$APP_DIR/Contents"
 MACOS="$CONTENTS/MacOS"
 RESOURCES="$CONTENTS/Resources"
 
+FRAMEWORKS="$CONTENTS/Frameworks"
+
 rm -rf "$APP_DIR" "$BIN_PATH/LiquidGlassNotes.app"
-mkdir -p "$MACOS" "$RESOURCES"
+mkdir -p "$MACOS" "$RESOURCES" "$FRAMEWORKS"
 
 cp "$BIN_PATH/LiquidGlassNotes" "$MACOS/Pane"
+
+if [ -d "$BIN_PATH/Sparkle.framework" ]; then
+    cp -R "$BIN_PATH/Sparkle.framework" "$FRAMEWORKS/Sparkle.framework"
+    install_name_tool -add_rpath @executable_path/../Frameworks "$MACOS/Pane" 2>/dev/null || true
+fi
 
 ICNS_SRC="Assets/Icon/Pane.icns"
 if [ -f "$ICNS_SRC" ]; then
@@ -52,9 +59,17 @@ cat > "$CONTENTS/Info.plist" <<'PLIST'
     <true/>
     <key>NSPrincipalClass</key>
     <string>NSApplication</string>
+    <key>SUFeedURL</key>
+    <string>https://marcusa27.github.io/pane/appcast.xml</string>
+    <key>SUPublicEDKey</key>
+    <string>HipTMpz8varSLhIdTIb8Siedvp27m1xb1j95bUcqZ9M=</string>
+    <key>SUEnableAutomaticChecks</key>
+    <true/>
 </dict>
 </plist>
 PLIST
+
+codesign --force --deep --sign - "$APP_DIR" 2>/dev/null
 
 open "$APP_DIR"
 echo "Launched: $APP_DIR"

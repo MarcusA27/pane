@@ -3,13 +3,15 @@ import AppKit
 
 enum Tool: Equatable {
     case text
-    case erase
     case marquee
 }
 
+private let sidebarWidth: CGFloat = 282
+
 struct ContentView: View {
     @EnvironmentObject var store: NoteStore
-    @State private var dropsOpen = false
+    @State private var sidebarVisible = true
+    @State private var mapOpen = false
     @State private var trashOpen = false
     @AppStorage("hasSeenWelcome") private var hasSeenWelcome = false
 
@@ -29,42 +31,39 @@ struct ContentView: View {
         .animation(.easeOut(duration: 0.45), value: hasSeenWelcome)
     }
 
+    @ViewBuilder
     private var appShell: some View {
         ZStack {
             if trashOpen {
                 TrashView()
                     .transition(.opacity)
-            } else if dropsOpen {
-                GlassDropsView(dropsOpen: $dropsOpen)
+            } else if mapOpen {
+                GlassDropsView(dropsOpen: $mapOpen)
                     .transition(.opacity)
             } else {
-                Detail()
+                workspace
                     .transition(.opacity)
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .animation(.easeInOut(duration: 0.32), value: dropsOpen)
+        .animation(.easeInOut(duration: 0.32), value: mapOpen)
         .animation(.easeInOut(duration: 0.28), value: trashOpen)
         .overlay(alignment: .bottomLeading) {
             GlassCircleButton {
                 if trashOpen {
                     trashOpen = false
-                } else if dropsOpen {
-                    trashOpen = true
+                } else if mapOpen {
+                    mapOpen = false
                 } else {
-                    dropsOpen = true
+                    withAnimation(.easeInOut(duration: 0.28)) { sidebarVisible.toggle() }
                 }
             } label: {
-                Image(systemName:
-                    trashOpen ? "xmark" :
-                    dropsOpen ? "trash" :
-                    "circle.hexagongrid")
+                Image(systemName: (trashOpen || mapOpen) ? "xmark" : "sidebar.left")
             }
             .keyboardShortcut("0", modifiers: .command)
             .help(
-                trashOpen ? "Back to overview  ⌘0" :
-                dropsOpen ? "View deleted notes  ⌘0" :
-                "Show note overview  ⌘0"
+                (trashOpen || mapOpen) ? "Back to notes  ⌘0" :
+                "Toggle sidebar  ⌘0"
             )
             .padding(.leading, 14)
             .padding(.bottom, 14)
@@ -77,6 +76,179 @@ struct ContentView: View {
             .frame(height: 60)
             .allowsHitTesting(false)
         }
+    }
+
+    private var workspace: some View {
+        ZStack(alignment: .topLeading) {
+            Detail()
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+
+            if sidebarVisible {
+                HStack(spacing: 0) {
+                    Sidebar(
+                        onOpenMap: { mapOpen = true },
+                        onOpenTrash: { trashOpen = true }
+                    )
+                    .frame(width: sidebarWidth)
+                    .background(
+                        VisualEffectView(material: .menu, blendingMode: .behindWindow)
+                            .ignoresSafeArea()
+                    )
+                    DividerLine()
+                }
+                .frame(maxHeight: .infinity)
+                .transition(.move(edge: .leading).combined(with: .opacity))
+                .zIndex(2)
+            }
+        }
+        .animation(.easeInOut(duration: 0.28), value: sidebarVisible)
+    }
+}
+
+struct DividerLine: View {
+    var body: some View {
+        Rectangle()
+            .fill(.white.opacity(0.08))
+            .frame(width: 0.5)
+            .frame(maxHeight: .infinity)
+            .overlay(
+                Rectangle()
+                    .fill(.black.opacity(0.18))
+                    .frame(width: 0.5)
+                    .blendMode(.multiply)
+            )
+    }
+}
+
+struct Sidebar: View {
+    @EnvironmentObject var store: NoteStore
+    var onOpenMap: () -> Void
+    var onOpenTrash: () -> Void
+
+    var body: some View {
+        VStack(spacing: 0) {
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                Text("Notes")
+                    .font(.system(size: 22, weight: .semibold, design: .rounded))
+                    .foregroundStyle(.primary)
+                Spacer()
+                GlassCircleButton { store.addNote() } label: {
+                    Image(systemName: "square.and.pencil")
+                }
+                .help("New Note  ⌘N")
+            }
+            .padding(.horizontal, 18)
+            .padding(.top, 14)
+            .padding(.bottom, 12)
+
+            ScrollView {
+                LazyVStack(spacing: 4) {
+                    ForEach(store.sortedNotes) { note in
+                        NoteRow(note: note, isSelected: store.selection == note.id)
+                            .contentShape(Rectangle())
+                            .onTapGesture { store.selection = note.id }
+                            .contextMenu {
+                                Button(role: .destructive) {
+                                    store.softDelete(noteID: note.id)
+                                } label: {
+                                    Label("Delete", systemImage: "trash")
+                                }
+                            }
+                    }
+                }
+                .padding(.horizontal, 10)
+                .padding(.bottom, 16)
+            }
+            .scrollIndicators(.never)
+            .scrollContentBackground(.hidden)
+
+            footer
+        }
+    }
+
+    private var footer: some View {
+        let deletedCount = store.deletedSortedNotes.count
+        return HStack(spacing: 2) {
+            Spacer()
+            Button(action: onOpenMap) {
+                Image(systemName: "circle.hexagongrid")
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundStyle(.secondary)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 6)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .help("Note map")
+
+            Button(action: onOpenTrash) {
+                HStack(spacing: 5) {
+                    Image(systemName: "trash")
+                        .font(.system(size: 12, weight: .medium))
+                    if deletedCount > 0 {
+                        Text("\(deletedCount)")
+                            .font(.system(size: 11, weight: .semibold))
+                    }
+                }
+                .foregroundStyle(.secondary)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 6)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .help("Deleted notes")
+        }
+        .padding(.horizontal, 14)
+        .padding(.bottom, 14)
+    }
+}
+
+struct NoteRow: View {
+    let note: Note
+    let isSelected: Bool
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 5) {
+            Text(note.displayTitle)
+                .font(.system(size: 13.5, weight: .semibold))
+                .foregroundStyle(.primary)
+                .lineLimit(1)
+            HStack(spacing: 6) {
+                Text(note.updatedAt, format: .relative(presentation: .named, unitsStyle: .abbreviated))
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundStyle(.secondary)
+                if !note.snippet.isEmpty {
+                    Text("·")
+                        .font(.system(size: 11))
+                        .foregroundStyle(.tertiary)
+                    Text(note.snippet)
+                        .font(.system(size: 11))
+                        .foregroundStyle(.tertiary)
+                        .lineLimit(1)
+                }
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.vertical, 9)
+        .padding(.horizontal, 12)
+        .background {
+            if isSelected {
+                RoundedRectangle(cornerRadius: 11, style: .continuous)
+                    .fill(.white.opacity(0.22))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 11, style: .continuous)
+                            .strokeBorder(
+                                LinearGradient(
+                                    colors: [.white.opacity(0.55), .white.opacity(0.08)],
+                                    startPoint: .topLeading, endPoint: .bottomTrailing
+                                ),
+                                lineWidth: 0.6
+                            )
+                    )
+                    .shadow(color: .black.opacity(0.10), radius: 8, x: 0, y: 3)
+            }
+        }
+        .animation(.easeOut(duration: 0.15), value: isSelected)
     }
 }
 
@@ -215,19 +387,10 @@ struct Editor: View {
                 record(.blockMoved(blockID: id, x: x, y: y, at: Date()))
             }
         )
-        .padding(.leading, 38)
-        .padding(.trailing, 4)
-        .padding(.top, 24)
-        .padding(.bottom, 24)
+        .padding(4)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .overlay(alignment: .topLeading) {
             HStack(spacing: 10) {
-                ToolButton(systemName: "rectangle.dashed", isActive: tool == .marquee) {
-                    tool = (tool == .marquee) ? .text : .marquee
-                }
-                ToolButton(systemName: "eraser", isActive: tool == .erase) {
-                    tool = (tool == .erase) ? .text : .erase
-                }
                 if note.hasPlayback {
                     Button {
                         flushAllPendingRuns()
@@ -259,14 +422,20 @@ struct Editor: View {
             if newTool != .text {
                 focusedBlock = nil
             }
-            if newTool != .marquee {
-                selectedBlockIDs = []
-                selectedStrokeIDs = []
-            }
         }
         .onDisappear {
             flushAllPendingRuns()
         }
+        .background(
+            CommandKeyWatcher { commandDown in
+                if commandDown {
+                    if focusedBlock == nil && tool != .marquee { tool = .marquee }
+                } else if tool == .marquee {
+                    tool = .text
+                }
+            }
+            .frame(width: 0, height: 0)
+        )
         .background(
             Group {
                 Button("") { deleteSelection() }
@@ -284,7 +453,7 @@ struct Editor: View {
     }
 
     private func deleteSelection() {
-        guard tool == .marquee,
+        guard focusedBlock == nil,
               !(selectedBlockIDs.isEmpty && selectedStrokeIDs.isEmpty) else { return }
         for id in selectedBlockIDs {
             note.blocks.removeAll { $0.id == id }
@@ -389,6 +558,7 @@ struct ScratchCanvas: View {
     @State private var dragState: DragState = .idle
     @State private var marqueeRect: CGRect? = nil
     @State private var selectionDragOffset: CGSize = .zero
+    @State private var activeDragTool: Tool? = nil
 
     private enum DragState {
         case idle
@@ -423,10 +593,8 @@ struct ScratchCanvas: View {
                 AnnotationsLayer(
                     annotations: $annotations,
                     currentStroke: currentStroke,
-                    tool: tool,
                     selectedStrokeIDs: selectedStrokeIDs,
-                    selectionDragOffset: selectionDragOffset,
-                    onStrokeErased: onStrokeErased
+                    selectionDragOffset: selectionDragOffset
                 )
 
                 if let rect = marqueeRect {
@@ -440,26 +608,44 @@ struct ScratchCanvas: View {
                         .position(x: rect.midX, y: rect.midY)
                         .allowsHitTesting(false)
                 }
+
+                EraseGestureView(onErase: eraseNear)
             }
         }
         .clipped()
     }
 
+    private static let eraseRadius: CGFloat = 14
+
+    private func eraseNear(_ point: CGPoint) {
+        let erased = annotations.filter { stroke in
+            stroke.points.contains { p in
+                hypot(p.x - point.x, p.y - point.y) < Self.eraseRadius
+            }
+        }
+        guard !erased.isEmpty else { return }
+        let erasedIDs = Set(erased.map(\.id))
+        annotations.removeAll { erasedIDs.contains($0.id) }
+        for stroke in erased {
+            onStrokeErased(stroke)
+        }
+    }
+
     private func emptySpaceGesture(geo: GeometryProxy) -> some Gesture {
         DragGesture(minimumDistance: 0, coordinateSpace: .local)
             .onChanged { value in
-                switch tool {
+                if case .idle = dragState { activeDragTool = tool }
+                switch activeDragTool ?? tool {
                 case .text: handleTextChange(value)
                 case .marquee: handleMarqueeChange(value, canvas: geo.size)
-                case .erase: break
                 }
             }
             .onEnded { value in
-                defer { dragState = .idle }
-                switch tool {
+                let mode = activeDragTool ?? tool
+                defer { dragState = .idle; activeDragTool = nil }
+                switch mode {
                 case .text: handleTextEnd(value, geo: geo)
                 case .marquee: handleMarqueeEnd(value, canvas: geo.size)
-                case .erase: break
                 }
             }
     }
@@ -468,6 +654,10 @@ struct ScratchCanvas: View {
         switch dragState {
         case .idle:
             if focusedBlock != nil { focusedBlock = nil }
+            if !selectedBlockIDs.isEmpty || !selectedStrokeIDs.isEmpty {
+                selectedBlockIDs = []
+                selectedStrokeIDs = []
+            }
             dragState = .pending(start: value.startLocation)
         case .pending(let start):
             let dx = value.location.x - start.x
@@ -627,13 +817,10 @@ struct ScratchCanvas: View {
 struct AnnotationsLayer: View {
     @Binding var annotations: [Stroke]
     let currentStroke: [CGPoint]
-    let tool: Tool
     var selectedStrokeIDs: Set<UUID> = []
     var selectionDragOffset: CGSize = .zero
-    let onStrokeErased: (Stroke) -> Void
 
     private static let strokeColor = Color(white: 0.18)
-    private static let eraseRadius: CGFloat = 14
 
     var body: some View {
         Canvas { context, _ in
@@ -657,28 +844,7 @@ struct AnnotationsLayer: View {
                 Self.drawPencil(&context, points: currentStroke, seed: 0)
             }
         }
-        .allowsHitTesting(tool == .erase)
-        .gesture(
-            DragGesture(minimumDistance: 0, coordinateSpace: .local)
-                .onChanged { value in
-                    guard tool == .erase else { return }
-                    eraseNear(value.location)
-                }
-        )
-    }
-
-    private func eraseNear(_ point: CGPoint) {
-        let erased = annotations.filter { stroke in
-            stroke.points.contains { p in
-                hypot(p.x - point.x, p.y - point.y) < Self.eraseRadius
-            }
-        }
-        guard !erased.isEmpty else { return }
-        let erasedIDs = Set(erased.map(\.id))
-        annotations.removeAll { erasedIDs.contains($0.id) }
-        for stroke in erased {
-            onStrokeErased(stroke)
-        }
+        .allowsHitTesting(false)
     }
 
     private static func drawSelectionHalo(_ context: inout GraphicsContext, points: [CGPoint]) {
@@ -770,8 +936,9 @@ struct BlockView: View {
     var body: some View {
         let blockID = block.id
         let size = Self.size(for: block.text, canvas: canvasSize)
-        let maxX = max(0, Double(canvasSize.width) - Double(size.width))
-        let maxY = max(0, Double(canvasSize.height) - Double(size.height))
+        let natural = Self.naturalSize(for: block.text, canvas: canvasSize)
+        let maxX = max(0, Double(canvasSize.width) - Double(natural.width))
+        let maxY = max(0, Double(canvasSize.height) - Double(natural.height))
 
         return CanvasTextEditor(
             text: $block.text,
@@ -824,7 +991,10 @@ struct BlockView: View {
         }
     }
 
-    static func size(for text: String, canvas: CGSize) -> CGSize {
+    /// Tight box around the glyphs plus their text insets — no minimum-size
+    /// padding. This is what the visible text actually occupies, so drag
+    /// clamping uses it to keep equal margins on every edge.
+    static func naturalSize(for text: String, canvas: CGSize) -> CGSize {
         let measureText = text.isEmpty ? " " : text
         let attr = NSAttributedString(string: measureText, attributes: [.font: blockFont])
 
@@ -837,12 +1007,102 @@ struct BlockView: View {
             options: [.usesLineFragmentOrigin, .usesFontLeading]
         )
 
-        let contentWidth = ceil(bounded.width)
-        let contentHeight = ceil(bounded.height)
+        return CGSize(
+            width: ceil(bounded.width) + 2 * lineFragmentPadding,
+            height: ceil(bounded.height) + 2 * verticalInset
+        )
+    }
 
-        let blockWidth = max(minBlockWidth, contentWidth + 2 * lineFragmentPadding)
-        let blockHeight = max(minBlockHeight, contentHeight + 2 * verticalInset)
+    static func size(for text: String, canvas: CGSize) -> CGSize {
+        let natural = naturalSize(for: text, canvas: canvas)
+        return CGSize(
+            width: max(minBlockWidth, natural.width),
+            height: max(minBlockHeight, natural.height)
+        )
+    }
+}
 
-        return CGSize(width: blockWidth, height: blockHeight)
+/// Reports the held/released edge of the Command key via a `.flagsChanged`
+/// monitor, so selection can be a momentary hold instead of a tool mode.
+struct CommandKeyWatcher: NSViewRepresentable {
+    var onChange: (Bool) -> Void
+
+    func makeNSView(context: Context) -> NSView {
+        context.coordinator.onChange = onChange
+        context.coordinator.install()
+        return NSView()
+    }
+
+    func updateNSView(_ nsView: NSView, context: Context) {
+        context.coordinator.onChange = onChange
+    }
+
+    static func dismantleNSView(_ nsView: NSView, coordinator: Coordinator) {
+        coordinator.uninstall()
+    }
+
+    func makeCoordinator() -> Coordinator { Coordinator() }
+
+    final class Coordinator {
+        var onChange: ((Bool) -> Void)?
+        private var monitor: Any?
+        private var lastCommand = false
+
+        func install() {
+            monitor = NSEvent.addLocalMonitorForEvents(matching: .flagsChanged) { [weak self] event in
+                guard let self else { return event }
+                let down = event.modifierFlags.contains(.command)
+                if down != self.lastCommand {
+                    self.lastCommand = down
+                    self.onChange?(down)
+                }
+                return event
+            }
+        }
+
+        func uninstall() {
+            if let monitor { NSEvent.removeMonitor(monitor) }
+            monitor = nil
+        }
+    }
+}
+
+/// Transparent overlay that intercepts only right-mouse (two-finger) drags so
+/// erasing works modelessly. Left-mouse events fall through to the views below,
+/// so drawing, typing, and selection are untouched.
+struct EraseGestureView: NSViewRepresentable {
+    var onErase: (CGPoint) -> Void
+
+    func makeNSView(context: Context) -> EraseNSView {
+        let v = EraseNSView()
+        v.onErase = onErase
+        return v
+    }
+
+    func updateNSView(_ nsView: EraseNSView, context: Context) {
+        nsView.onErase = onErase
+    }
+}
+
+final class EraseNSView: NSView {
+    var onErase: ((CGPoint) -> Void)?
+
+    override var isFlipped: Bool { true }
+
+    override func hitTest(_ point: NSPoint) -> NSView? {
+        switch NSApp.currentEvent?.type {
+        case .rightMouseDown, .rightMouseDragged, .rightMouseUp:
+            return self
+        default:
+            return nil
+        }
+    }
+
+    override func rightMouseDown(with event: NSEvent) {
+        onErase?(convert(event.locationInWindow, from: nil))
+    }
+
+    override func rightMouseDragged(with event: NSEvent) {
+        onErase?(convert(event.locationInWindow, from: nil))
     }
 }

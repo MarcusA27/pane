@@ -27,7 +27,7 @@ struct LiquidGlassNotesApp: App {
         WindowGroup {
             ContentView()
                 .environmentObject(store)
-                .frame(minWidth: 820, minHeight: 540)
+                .frame(width: 820, height: 540)
                 .background(
                     VisualEffectView(material: .hudWindow, blendingMode: .behindWindow)
                         .ignoresSafeArea()
@@ -83,6 +83,7 @@ struct WindowConfigurator: NSViewRepresentable {
             window.styleMask.insert(.fullSizeContentView)
             window.isMovableByWindowBackground = false
             window.hasShadow = true
+            window.styleMask.remove(.resizable)
         }
         return view
     }

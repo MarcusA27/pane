@@ -939,6 +939,8 @@ struct BlockView: View {
         let natural = Self.naturalSize(for: block.text, canvas: canvasSize)
         let maxX = max(0, Double(canvasSize.width) - Double(natural.width))
         let maxY = max(0, Double(canvasSize.height) - Double(natural.height))
+        let clampedX = min(max(0, block.x), maxX)
+        let clampedY = min(max(0, block.y), maxY)
 
         return CanvasTextEditor(
             text: $block.text,
@@ -982,12 +984,17 @@ struct BlockView: View {
         )
         .shadow(color: .black.opacity(0.18), radius: 1.2, x: 0.5, y: 1.2)
         .offset(
-            x: CGFloat(block.x) + activeDrag.width + (isSelected ? selectionDragOffset.width : 0),
-            y: CGFloat(block.y) + activeDrag.height + (isSelected ? selectionDragOffset.height : 0)
+            x: CGFloat(clampedX) + activeDrag.width + (isSelected ? selectionDragOffset.width : 0),
+            y: CGFloat(clampedY) + activeDrag.height + (isSelected ? selectionDragOffset.height : 0)
         )
         .zIndex(activeDrag != .zero ? 1 : 0)
         .onChange(of: block.text) { _, newText in
             onTextChanged(blockID, newText)
+            let grown = Self.naturalSize(for: newText, canvas: canvasSize)
+            let mx = max(0, Double(canvasSize.width) - Double(grown.width))
+            let my = max(0, Double(canvasSize.height) - Double(grown.height))
+            if block.x > mx { block.x = mx }
+            if block.y > my { block.y = my }
         }
     }
 

@@ -11,7 +11,6 @@ private let sidebarWidth: CGFloat = 282
 struct ContentView: View {
     @EnvironmentObject var store: NoteStore
     @State private var sidebarVisible = true
-    @State private var mapOpen = false
     @State private var trashOpen = false
     @State private var inboxOpen = false
     @AppStorage("hasSeenWelcome") private var hasSeenWelcome = false
@@ -41,27 +40,21 @@ struct ContentView: View {
             } else if inboxOpen {
                 InboxView()
                     .transition(.opacity)
-            } else if mapOpen {
-                GlassDropsView(dropsOpen: $mapOpen)
-                    .transition(.opacity)
             } else {
                 workspace
                     .transition(.opacity)
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .animation(.easeInOut(duration: 0.32), value: mapOpen)
         .animation(.easeInOut(duration: 0.28), value: trashOpen)
         .animation(.easeInOut(duration: 0.28), value: inboxOpen)
         .overlay(alignment: .bottomLeading) {
-            let overlayOpen = trashOpen || mapOpen || inboxOpen
+            let overlayOpen = trashOpen || inboxOpen
             GlassCircleButton {
                 if trashOpen {
                     trashOpen = false
                 } else if inboxOpen {
                     inboxOpen = false
-                } else if mapOpen {
-                    mapOpen = false
                 } else {
                     withAnimation(.easeInOut(duration: 0.28)) { sidebarVisible.toggle() }
                 }
@@ -94,7 +87,6 @@ struct ContentView: View {
             if sidebarVisible {
                 HStack(spacing: 0) {
                     Sidebar(
-                        onOpenMap: { mapOpen = true },
                         onOpenTrash: { trashOpen = true },
                         onOpenInbox: { inboxOpen = true }
                     )
@@ -131,7 +123,6 @@ struct DividerLine: View {
 
 struct Sidebar: View {
     @EnvironmentObject var store: NoteStore
-    var onOpenMap: () -> Void
     var onOpenTrash: () -> Void
     var onOpenInbox: () -> Void
 
@@ -197,17 +188,6 @@ struct Sidebar: View {
             }
             .buttonStyle(.plain)
             .help("Inbox")
-
-            Button(action: onOpenMap) {
-                Image(systemName: "circle.hexagongrid")
-                    .font(.system(size: 13, weight: .medium))
-                    .foregroundStyle(.secondary)
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 6)
-                    .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-            .help("Note map")
 
             Button(action: onOpenTrash) {
                 HStack(spacing: 5) {

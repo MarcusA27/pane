@@ -41,7 +41,6 @@ struct Note: Identifiable, Codable, Hashable {
     var annotations: [Stroke] = []
     var history: [EditEvent] = []
     var updatedAt: Date = Date()
-    var orbPosition: CGPoint? = nil
     var deletedAt: Date? = nil
 
     init(id: UUID = UUID(),
@@ -50,7 +49,6 @@ struct Note: Identifiable, Codable, Hashable {
          annotations: [Stroke] = [],
          history: [EditEvent] = [],
          updatedAt: Date = Date(),
-         orbPosition: CGPoint? = nil,
          deletedAt: Date? = nil) {
         self.id = id
         self.title = title
@@ -58,12 +56,11 @@ struct Note: Identifiable, Codable, Hashable {
         self.annotations = annotations
         self.history = history
         self.updatedAt = updatedAt
-        self.orbPosition = orbPosition
         self.deletedAt = deletedAt
     }
 
     private enum CodingKeys: String, CodingKey {
-        case id, title, blocks, annotations, history, updatedAt, body, orbPosition, deletedAt
+        case id, title, blocks, annotations, history, updatedAt, body, deletedAt
     }
 
     init(from decoder: Decoder) throws {
@@ -73,7 +70,6 @@ struct Note: Identifiable, Codable, Hashable {
         self.updatedAt = try c.decodeIfPresent(Date.self, forKey: .updatedAt) ?? Date()
         self.annotations = try c.decodeIfPresent([Stroke].self, forKey: .annotations) ?? []
         self.history = try c.decodeIfPresent([EditEvent].self, forKey: .history) ?? []
-        self.orbPosition = try c.decodeIfPresent(CGPoint.self, forKey: .orbPosition)
         self.deletedAt = try c.decodeIfPresent(Date.self, forKey: .deletedAt)
         if let blocks = try c.decodeIfPresent([TextBlock].self, forKey: .blocks) {
             self.blocks = blocks
@@ -93,7 +89,6 @@ struct Note: Identifiable, Codable, Hashable {
         try c.encode(annotations, forKey: .annotations)
         try c.encode(history, forKey: .history)
         try c.encode(updatedAt, forKey: .updatedAt)
-        try c.encodeIfPresent(orbPosition, forKey: .orbPosition)
         try c.encodeIfPresent(deletedAt, forKey: .deletedAt)
     }
 
@@ -129,6 +124,8 @@ struct Idea: Identifiable, Codable, Hashable {
 
 @MainActor
 final class NoteStore: ObservableObject {
+    static let shared = NoteStore()
+
     @Published var notes: [Note] = []
     @Published var selection: Note.ID?
     @Published var ideas: [Idea] = []
@@ -187,9 +184,8 @@ final class NoteStore: ObservableObject {
     }
 
     @discardableResult
-    func addNote(orbPosition: CGPoint? = nil) -> Note.ID {
-        var note = Note()
-        note.orbPosition = orbPosition
+    func addNote() -> Note.ID {
+        let note = Note()
         notes.insert(note, at: 0)
         selection = note.id
         persistNow()
@@ -212,12 +208,6 @@ final class NoteStore: ObservableObject {
     func permanentlyDelete(noteID: Note.ID) {
         notes.removeAll { $0.id == noteID }
         if selection == noteID { selection = sortedNotes.first?.id }
-        scheduleSave()
-    }
-
-    func setOrbPosition(noteID: Note.ID, position: CGPoint) {
-        guard let idx = notes.firstIndex(where: { $0.id == noteID }) else { return }
-        notes[idx].orbPosition = position
         scheduleSave()
     }
 

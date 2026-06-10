@@ -13,6 +13,7 @@ struct ContentView: View {
     @State private var sidebarVisible = true
     @State private var mapOpen = false
     @State private var trashOpen = false
+    @State private var inboxOpen = false
     @AppStorage("hasSeenWelcome") private var hasSeenWelcome = false
 
     var body: some View {
@@ -37,6 +38,9 @@ struct ContentView: View {
             if trashOpen {
                 TrashView()
                     .transition(.opacity)
+            } else if inboxOpen {
+                InboxView()
+                    .transition(.opacity)
             } else if mapOpen {
                 GlassDropsView(dropsOpen: $mapOpen)
                     .transition(.opacity)
@@ -48,21 +52,25 @@ struct ContentView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .animation(.easeInOut(duration: 0.32), value: mapOpen)
         .animation(.easeInOut(duration: 0.28), value: trashOpen)
+        .animation(.easeInOut(duration: 0.28), value: inboxOpen)
         .overlay(alignment: .bottomLeading) {
+            let overlayOpen = trashOpen || mapOpen || inboxOpen
             GlassCircleButton {
                 if trashOpen {
                     trashOpen = false
+                } else if inboxOpen {
+                    inboxOpen = false
                 } else if mapOpen {
                     mapOpen = false
                 } else {
                     withAnimation(.easeInOut(duration: 0.28)) { sidebarVisible.toggle() }
                 }
             } label: {
-                Image(systemName: (trashOpen || mapOpen) ? "xmark" : "sidebar.left")
+                Image(systemName: overlayOpen ? "xmark" : "sidebar.left")
             }
             .keyboardShortcut("0", modifiers: .command)
             .help(
-                (trashOpen || mapOpen) ? "Back to notes  ⌘0" :
+                overlayOpen ? "Back to notes  ⌘0" :
                 "Toggle sidebar  ⌘0"
             )
             .padding(.leading, 14)
@@ -87,7 +95,8 @@ struct ContentView: View {
                 HStack(spacing: 0) {
                     Sidebar(
                         onOpenMap: { mapOpen = true },
-                        onOpenTrash: { trashOpen = true }
+                        onOpenTrash: { trashOpen = true },
+                        onOpenInbox: { inboxOpen = true }
                     )
                     .frame(width: sidebarWidth)
                     .background(
@@ -124,6 +133,7 @@ struct Sidebar: View {
     @EnvironmentObject var store: NoteStore
     var onOpenMap: () -> Void
     var onOpenTrash: () -> Void
+    var onOpenInbox: () -> Void
 
     var body: some View {
         VStack(spacing: 0) {
@@ -168,8 +178,26 @@ struct Sidebar: View {
 
     private var footer: some View {
         let deletedCount = store.deletedSortedNotes.count
+        let ideaCount = store.ideas.count
         return HStack(spacing: 2) {
             Spacer()
+            Button(action: onOpenInbox) {
+                HStack(spacing: 5) {
+                    Image(systemName: "tray")
+                        .font(.system(size: 13, weight: .medium))
+                    if ideaCount > 0 {
+                        Text("\(ideaCount)")
+                            .font(.system(size: 11, weight: .semibold))
+                    }
+                }
+                .foregroundStyle(.secondary)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 6)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .help("Inbox")
+
             Button(action: onOpenMap) {
                 Image(systemName: "circle.hexagongrid")
                     .font(.system(size: 13, weight: .medium))

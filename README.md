@@ -1,5 +1,5 @@
 # Pane
-
+<img width="952" height="685" alt="Screenshot 2026-07-02 at 12 09 54 AM" src="https://github.com/user-attachments/assets/e4a2a0c4-e370-4dcb-9553-0f396c6da89f" />
 A quiet place for notes. macOS-only, built in SwiftUI.
 
 ## Install

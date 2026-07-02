@@ -8,7 +8,9 @@ A quiet place for notes. macOS-only, built in SwiftUI.
 
 Download the latest `Pane-x.y.z.dmg` from the [Releases](../../releases) page, open it, and drag **Pane** to your Applications folder.
 
-**First launch:** Pane isn't notarized through Apple, so macOS will block it the first time with a dialog like *"Pane Not Opened — Apple could not verify..."*. To allow it:
+# First launch (IMPORTANT): 
+
+Pane isn't notarized through Apple, so macOS will block it the first time with a dialog like *"Pane Not Opened — Apple could not verify..."*. To allow it:
 
 1. Click **Done** to dismiss the dialog.
 2. Open **System Settings → Privacy & Security**.

@@ -49,4 +49,4 @@ To produce a release DMG:
 
 ## Data
 
-Notes live in `~/Library/Application Support/LiquidGlassNotes/notes.json`. Back that up if you care about it.
+Notes live in `~/Library/Application Support/Pane/notes.json`. Pane keeps a copy of the previous save in `notes.backup.json` alongside it and recovers from that automatically if the main file is ever unreadable.

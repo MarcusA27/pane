@@ -433,7 +433,11 @@ struct Editor: View {
                 .padding(.trailing, 16)
                 .padding(.top, 18)
         }
-        .onChange(of: focusedBlock) { oldID, _ in
+        .onChange(of: focusedBlock) { oldID, newID in
+            if let newID, lastRecordedText[newID] == nil,
+               let block = note.blocks.first(where: { $0.id == newID }) {
+                lastRecordedText[newID] = block.text
+            }
             handleFocusChange(oldID: oldID)
         }
         .onChange(of: tool) { _, newTool in

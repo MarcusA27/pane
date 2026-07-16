@@ -58,6 +58,11 @@ if [ -f "$ICNS_SRC" ]; then
     cp "$ICNS_SRC" "$RESOURCES/Pane.icns"
 fi
 
+CAR_SRC="Assets/Icon/Assets.car"
+if [ -f "$CAR_SRC" ]; then
+    cp "$CAR_SRC" "$RESOURCES/Assets.car"
+fi
+
 cat > "$CONTENTS/Info.plist" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -66,6 +71,8 @@ cat > "$CONTENTS/Info.plist" <<PLIST
     <key>CFBundleExecutable</key>
     <string>Pane</string>
     <key>CFBundleIconFile</key>
+    <string>Pane</string>
+    <key>CFBundleIconName</key>
     <string>Pane</string>
     <key>CFBundleIdentifier</key>
     <string>com.marcus.LiquidGlassNotes</string>

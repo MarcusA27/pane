@@ -114,6 +114,7 @@ struct Note: Identifiable, Codable, Hashable {
         let titleEmpty = title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
         return orderedLines.dropFirst(titleEmpty ? 1 : 0).first ?? ""
     }
+
 }
 
 @MainActor
@@ -124,6 +125,7 @@ final class NoteStore: ObservableObject {
     @Published var selection: Note.ID?
 
     private let fileURL: URL
+    private let backupURL: URL
     private var saveTask: Task<Void, Never>?
 
     init() {
@@ -135,6 +137,7 @@ final class NoteStore: ObservableObject {
         let dir = support.appendingPathComponent("Pane", isDirectory: true)
         try? fm.createDirectory(at: dir, withIntermediateDirectories: true)
         self.fileURL = dir.appendingPathComponent("notes.json")
+        self.backupURL = dir.appendingPathComponent("notes.backup.json")
 
         // Migrate from the pre-rename location for anyone upgrading from 0.1.0.
         let legacyURL = support
@@ -243,9 +246,27 @@ final class NoteStore: ObservableObject {
 
 
     private func load() {
-        guard let data = try? Data(contentsOf: fileURL),
-              let decoded = try? JSONDecoder().decode([Note].self, from: data) else { return }
-        notes = decoded
+        if let decoded = Self.decodeNotes(at: fileURL) {
+            notes = decoded
+            return
+        }
+
+        // Decode failed. Move the unreadable file aside so the welcome-note
+        // bootstrap can't overwrite it, then fall back to the last backup.
+        let fm = FileManager.default
+        guard fm.fileExists(atPath: fileURL.path) else { return }
+        let quarantineURL = fileURL.deletingLastPathComponent()
+            .appendingPathComponent("notes.corrupt-\(Int(Date().timeIntervalSince1970)).json")
+        try? fm.moveItem(at: fileURL, to: quarantineURL)
+
+        if let recovered = Self.decodeNotes(at: backupURL) {
+            notes = recovered
+        }
+    }
+
+    private static func decodeNotes(at url: URL) -> [Note]? {
+        guard let data = try? Data(contentsOf: url) else { return nil }
+        return try? JSONDecoder().decode([Note].self, from: data)
     }
 
     private func scheduleSave() {
@@ -259,6 +280,11 @@ final class NoteStore: ObservableObject {
 
     private func persistNow() {
         guard let data = try? JSONEncoder().encode(notes) else { return }
+        let fm = FileManager.default
+        if fm.fileExists(atPath: fileURL.path) {
+            try? fm.removeItem(at: backupURL)
+            try? fm.copyItem(at: fileURL, to: backupURL)
+        }
         try? data.write(to: fileURL, options: .atomic)
     }
 }

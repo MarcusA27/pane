@@ -6,14 +6,14 @@
         <description>Updates for Pane.</description>
         <language>en</language>
         <item>
-            <title>Version 0.1.3</title>
-            <pubDate>Wed, 10 Jun 2026 00:33:28 +0000</pubDate>
-            <sparkle:version>0.1.3</sparkle:version>
-            <sparkle:shortVersionString>0.1.3</sparkle:shortVersionString>
+            <title>Version 0.2.0</title>
+            <pubDate>Thu, 16 Jul 2026 17:11:12 +0000</pubDate>
+            <sparkle:version>0.2.0</sparkle:version>
+            <sparkle:shortVersionString>0.2.0</sparkle:shortVersionString>
             <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
-            <enclosure url="https://github.com/MarcusA27/pane/releases/download/v0.1.3/Pane-0.1.3.dmg"
-                       sparkle:edSignature="szah5laMsLiLrudXpH0ApkzAmbcYper6DeCKvL1XRTZIgu6yvkLe7/iBUfpUMxJTDySv/3SXRofHHCFX3oCQBw=="
-                       length="4184981"
+            <enclosure url="https://github.com/MarcusA27/pane/releases/download/v0.2.0/Pane-0.2.0.dmg"
+                       sparkle:edSignature="oM4zdHKBoebgYZuULZPsAs6HzbVqvjdtkrAlCdYJxGn4iJJDXls/E7LdL/eZ5t3zIh0qWXadC7mCUR8H6kM+Dw=="
+                       length="3467218"
                        type="application/octet-stream" />
         </item>
     </channel>

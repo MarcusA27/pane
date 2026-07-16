@@ -563,6 +563,8 @@ struct ScratchCanvas: View {
     let onBlockMoved: (UUID, Double, Double) -> Void
 
     @State private var currentStroke: [CGPoint] = []
+    @State private var pendingPoints: [CGPoint] = []
+    @State private var liveStrokeID = UUID()
     @State private var dragState: DragState = .idle
     @State private var marqueeRect: CGRect? = nil
     @State private var selectionDragOffset: CGSize = .zero
@@ -577,6 +579,8 @@ struct ScratchCanvas: View {
     }
 
     private static let dragThreshold: CGFloat = 6
+    private static let strokeSmoothing: CGFloat = 0.5
+    private static let minPointDistance: CGFloat = 1.5
 
     var body: some View {
         GeometryReader { geo in
@@ -601,6 +605,7 @@ struct ScratchCanvas: View {
                 AnnotationsLayer(
                     annotations: $annotations,
                     currentStroke: currentStroke,
+                    currentStrokeSeed: liveStrokeID.hashValue,
                     selectedStrokeIDs: selectedStrokeIDs,
                     selectionDragOffset: selectionDragOffset
                 )
@@ -666,19 +671,39 @@ struct ScratchCanvas: View {
                 selectedBlockIDs = []
                 selectedStrokeIDs = []
             }
+            pendingPoints = [value.startLocation]
             dragState = .pending(start: value.startLocation)
         case .pending(let start):
+            pendingPoints.append(value.location)
             let dx = value.location.x - start.x
             let dy = value.location.y - start.y
             if hypot(dx, dy) > Self.dragThreshold {
                 dragState = .drawing
-                currentStroke = [start, value.location]
+                liveStrokeID = UUID()
+                currentStroke = []
+                for p in pendingPoints {
+                    appendStrokePoint(p)
+                }
+                pendingPoints = []
             }
         case .drawing:
-            currentStroke.append(value.location)
+            appendStrokePoint(value.location)
         case .marquee, .movingSelection:
             break
         }
+    }
+
+    private func appendStrokePoint(_ raw: CGPoint) {
+        guard let last = currentStroke.last else {
+            currentStroke = [raw]
+            return
+        }
+        let smoothed = CGPoint(
+            x: last.x + (raw.x - last.x) * Self.strokeSmoothing,
+            y: last.y + (raw.y - last.y) * Self.strokeSmoothing
+        )
+        guard hypot(smoothed.x - last.x, smoothed.y - last.y) >= Self.minPointDistance else { return }
+        currentStroke.append(smoothed)
     }
 
     private func handleTextEnd(_ value: DragGesture.Value, geo: GeometryProxy) {
@@ -693,8 +718,11 @@ struct ScratchCanvas: View {
             focusedBlock = new.id
             onBlockCreated(new.id, x, y)
         case .drawing:
+            if let last = currentStroke.last, last != value.location {
+                currentStroke.append(value.location)
+            }
             if currentStroke.count > 1 {
-                let stroke = Stroke(points: currentStroke)
+                let stroke = Stroke(id: liveStrokeID, points: currentStroke)
                 annotations.append(stroke)
                 onStrokeAdded(stroke)
             }
@@ -702,6 +730,7 @@ struct ScratchCanvas: View {
         case .idle, .marquee, .movingSelection:
             break
         }
+        pendingPoints = []
     }
 
     private func handleMarqueeChange(_ value: DragGesture.Value, canvas: CGSize) {
@@ -825,6 +854,7 @@ struct ScratchCanvas: View {
 struct AnnotationsLayer: View {
     @Binding var annotations: [Stroke]
     let currentStroke: [CGPoint]
+    var currentStrokeSeed: Int = 0
     var selectedStrokeIDs: Set<UUID> = []
     var selectionDragOffset: CGSize = .zero
 
@@ -849,7 +879,7 @@ struct AnnotationsLayer: View {
                 Self.drawPencil(&context, points: pts, seed: stroke.id.hashValue)
             }
             if !currentStroke.isEmpty {
-                Self.drawPencil(&context, points: currentStroke, seed: 0)
+                Self.drawPencil(&context, points: currentStroke, seed: currentStrokeSeed)
             }
         }
         .allowsHitTesting(false)

@@ -229,18 +229,18 @@ struct NoteRow: View {
         .background {
             if isSelected {
                 RoundedRectangle(cornerRadius: 11, style: .continuous)
-                    .fill(.white.opacity(0.22))
+                    .fill(.white.opacity(0.38))
                     .overlay(
                         RoundedRectangle(cornerRadius: 11, style: .continuous)
                             .strokeBorder(
                                 LinearGradient(
-                                    colors: [.white.opacity(0.55), .white.opacity(0.08)],
+                                    colors: [.white.opacity(0.75), .white.opacity(0.18)],
                                     startPoint: .topLeading, endPoint: .bottomTrailing
                                 ),
-                                lineWidth: 0.6
+                                lineWidth: 0.8
                             )
                     )
-                    .shadow(color: .black.opacity(0.10), radius: 8, x: 0, y: 3)
+                    .shadow(color: .black.opacity(0.16), radius: 9, x: 0, y: 3)
             }
         }
         .animation(.easeOut(duration: 0.15), value: isSelected)

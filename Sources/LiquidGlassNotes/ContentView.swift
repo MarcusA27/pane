@@ -11,6 +11,9 @@ private let sidebarWidth: CGFloat = 282
 struct ContentView: View {
     @EnvironmentObject var store: NoteStore
     @State private var sidebarVisible = true
+    @State private var searchVisible = false
+    @State private var searchQuery = ""
+    @State private var searchFocusTick = 0
     @AppStorage("hasSeenWelcome") private var hasSeenWelcome = false
 
     var body: some View {
@@ -36,6 +39,9 @@ struct ContentView: View {
             .overlay(alignment: .bottomLeading) {
                 GlassCircleButton {
                     withAnimation(.easeInOut(duration: 0.28)) { sidebarVisible.toggle() }
+                    if !sidebarVisible {
+                        dismissSearch()
+                    }
                 } label: {
                     Image(systemName: "sidebar.left")
                 }
@@ -44,6 +50,16 @@ struct ContentView: View {
                 .padding(.leading, 14)
                 .padding(.bottom, 14)
             }
+            .background(
+                Button("") {
+                    withAnimation(.easeInOut(duration: 0.28)) { sidebarVisible = true }
+                    withAnimation(.easeOut(duration: 0.18)) { searchVisible = true }
+                    searchFocusTick += 1
+                }
+                .keyboardShortcut("f", modifiers: .command)
+                .opacity(0)
+                .frame(width: 0, height: 0)
+            )
         .overlay(alignment: .top) {
             LinearGradient(
                 colors: [.white.opacity(0.06), .clear],
@@ -61,7 +77,12 @@ struct ContentView: View {
 
             if sidebarVisible {
                 HStack(spacing: 0) {
-                    Sidebar()
+                    Sidebar(
+                        searchVisible: $searchVisible,
+                        searchQuery: $searchQuery,
+                        searchFocusTick: searchFocusTick,
+                        onDismissSearch: dismissSearch
+                    )
                     .frame(width: sidebarWidth)
                     .background(
                         VisualEffectView(material: .menu, blendingMode: .behindWindow)
@@ -75,6 +96,11 @@ struct ContentView: View {
             }
         }
         .animation(.easeInOut(duration: 0.28), value: sidebarVisible)
+    }
+
+    private func dismissSearch() {
+        withAnimation(.easeOut(duration: 0.18)) { searchVisible = false }
+        searchQuery = ""
     }
 }
 
@@ -96,14 +122,31 @@ struct DividerLine: View {
 struct Sidebar: View {
     @EnvironmentObject var store: NoteStore
     @Environment(\.undoManager) private var undoManager
+    @Binding var searchVisible: Bool
+    @Binding var searchQuery: String
+    let searchFocusTick: Int
+    let onDismissSearch: () -> Void
+
+    @FocusState private var searchFocused: Bool
 
     private static let listTopInset: CGFloat = 10
 
+    private var filteredNotes: [Note] {
+        guard searchVisible else { return store.sortedNotes }
+        return store.sortedNotes.filter { $0.matches(searchQuery) }
+    }
+
     var body: some View {
         VStack(spacing: 0) {
+            if searchVisible {
+                searchField
+                    .padding(.horizontal, 10)
+                    .padding(.bottom, 8)
+                    .transition(.move(edge: .top).combined(with: .opacity))
+            }
             ScrollView {
                 LazyVStack(spacing: 4) {
-                    ForEach(store.sortedNotes) { note in
+                    ForEach(filteredNotes) { note in
                         NoteRow(note: note, isSelected: store.selection == note.id)
                             .contentShape(Rectangle())
                             .onTapGesture { store.selection = note.id }
@@ -115,14 +158,66 @@ struct Sidebar: View {
                                 }
                             }
                     }
+                    if searchVisible && filteredNotes.isEmpty {
+                        Text("No matches")
+                            .font(.system(size: 12))
+                            .foregroundStyle(.tertiary)
+                            .padding(.top, 24)
+                    }
                 }
                 .padding(.horizontal, 10)
                 .padding(.bottom, 58)
             }
             .scrollIndicators(.never)
             .scrollContentBackground(.hidden)
-            .padding(.top, Self.listTopInset)
         }
+        .padding(.top, Self.listTopInset)
+        .onChange(of: searchFocusTick) { _, _ in
+            searchFocused = true
+        }
+    }
+
+    private var searchField: some View {
+        HStack(spacing: 7) {
+            Image(systemName: "magnifyingglass")
+                .font(.system(size: 11, weight: .medium))
+                .foregroundStyle(.secondary)
+            TextField("Search", text: $searchQuery)
+                .textFieldStyle(.plain)
+                .font(.system(size: 12.5))
+                .focused($searchFocused)
+                .onSubmit {
+                    if let first = filteredNotes.first {
+                        store.selection = first.id
+                    }
+                    searchFocused = true
+                }
+            if !searchQuery.isEmpty {
+                Button {
+                    searchQuery = ""
+                } label: {
+                    Image(systemName: "xmark.circle.fill")
+                        .font(.system(size: 11))
+                        .foregroundStyle(.secondary)
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 6)
+        .background(
+            RoundedRectangle(cornerRadius: 9, style: .continuous)
+                .fill(.white.opacity(0.14))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 9, style: .continuous)
+                        .strokeBorder(.white.opacity(0.25), lineWidth: 0.5)
+                )
+        )
+        .background(
+            EscapeKeyWatcher { onDismissSearch() }
+                .frame(width: 0, height: 0)
+        )
+        .onAppear { searchFocused = true }
     }
 }
 
@@ -979,6 +1074,47 @@ struct BlockView: View {
             width: max(minBlockWidth, natural.width),
             height: max(minBlockHeight, natural.height)
         )
+    }
+}
+
+/// Consumes Escape while the search field exists. The AppKit field editor
+/// swallows Escape before SwiftUI's keyboardShortcut/onKeyPress see it, so
+/// a local event monitor is the only reliable hook.
+struct EscapeKeyWatcher: NSViewRepresentable {
+    var onEscape: () -> Void
+
+    func makeNSView(context: Context) -> NSView {
+        context.coordinator.onEscape = onEscape
+        context.coordinator.install()
+        return NSView()
+    }
+
+    func updateNSView(_ nsView: NSView, context: Context) {
+        context.coordinator.onEscape = onEscape
+    }
+
+    static func dismantleNSView(_ nsView: NSView, coordinator: Coordinator) {
+        coordinator.uninstall()
+    }
+
+    func makeCoordinator() -> Coordinator { Coordinator() }
+
+    final class Coordinator {
+        var onEscape: (() -> Void)?
+        private var monitor: Any?
+
+        func install() {
+            monitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
+                guard let self, event.keyCode == 53 else { return event }
+                self.onEscape?()
+                return nil
+            }
+        }
+
+        func uninstall() {
+            if let monitor { NSEvent.removeMonitor(monitor) }
+            monitor = nil
+        }
     }
 }
 

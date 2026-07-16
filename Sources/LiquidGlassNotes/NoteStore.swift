@@ -115,6 +115,12 @@ struct Note: Identifiable, Codable, Hashable {
         return orderedLines.dropFirst(titleEmpty ? 1 : 0).first ?? ""
     }
 
+    func matches(_ query: String) -> Bool {
+        let q = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        if q.isEmpty { return true }
+        if title.localizedCaseInsensitiveContains(q) { return true }
+        return blocks.contains { $0.text.localizedCaseInsensitiveContains(q) }
+    }
 }
 
 @MainActor

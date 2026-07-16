@@ -253,7 +253,7 @@ final class NoteStore: ObservableObject {
 
     private func load() {
         if let decoded = Self.decodeNotes(at: fileURL) {
-            notes = decoded
+            notes = Self.prunedEmptyBlocks(decoded)
             return
         }
 
@@ -266,13 +266,26 @@ final class NoteStore: ObservableObject {
         try? fm.moveItem(at: fileURL, to: quarantineURL)
 
         if let recovered = Self.decodeNotes(at: backupURL) {
-            notes = recovered
+            notes = Self.prunedEmptyBlocks(recovered)
         }
     }
 
     private static func decodeNotes(at url: URL) -> [Note]? {
         guard let data = try? Data(contentsOf: url) else { return nil }
         return try? JSONDecoder().decode([Note].self, from: data)
+    }
+
+    /// Blocks left empty when the app quits are never cleaned up by the
+    /// focus-change path, so they accumulate on disk. Drop them at load
+    /// without touching updatedAt.
+    private static func prunedEmptyBlocks(_ notes: [Note]) -> [Note] {
+        notes.map { note in
+            var pruned = note
+            pruned.blocks.removeAll {
+                $0.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            }
+            return pruned
+        }
     }
 
     private func scheduleSave() {

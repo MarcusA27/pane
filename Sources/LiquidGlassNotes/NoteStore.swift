@@ -116,22 +116,14 @@ struct Note: Identifiable, Codable, Hashable {
     }
 }
 
-struct Idea: Identifiable, Codable, Hashable {
-    var id: UUID = UUID()
-    var text: String
-    var createdAt: Date = Date()
-}
-
 @MainActor
 final class NoteStore: ObservableObject {
     static let shared = NoteStore()
 
     @Published var notes: [Note] = []
     @Published var selection: Note.ID?
-    @Published var ideas: [Idea] = []
 
     private let fileURL: URL
-    private let ideasURL: URL
     private var saveTask: Task<Void, Never>?
 
     init() {
@@ -143,7 +135,6 @@ final class NoteStore: ObservableObject {
         let dir = support.appendingPathComponent("Pane", isDirectory: true)
         try? fm.createDirectory(at: dir, withIntermediateDirectories: true)
         self.fileURL = dir.appendingPathComponent("notes.json")
-        self.ideasURL = dir.appendingPathComponent("ideas.json")
 
         // Migrate from the pre-rename location for anyone upgrading from 0.1.0.
         let legacyURL = support
@@ -155,7 +146,6 @@ final class NoteStore: ObservableObject {
         }
 
         load()
-        loadIdeas()
         purgeExpiredDeletes()
         if notes.isEmpty {
             let welcome = Note(
@@ -177,6 +167,7 @@ final class NoteStore: ObservableObject {
     var sortedNotes: [Note] {
         notes.filter { $0.deletedAt == nil }.sorted { $0.updatedAt > $1.updatedAt }
     }
+
 
     @discardableResult
     func addNote() -> Note.ID {
@@ -250,55 +241,6 @@ final class NoteStore: ObservableObject {
         )
     }
 
-    var sortedIdeas: [Idea] {
-        ideas.sorted { $0.createdAt < $1.createdAt }
-    }
-
-    func addIdea(_ text: String) {
-        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else { return }
-        ideas.append(Idea(text: trimmed))
-        persistIdeasNow()
-    }
-
-    func deleteIdea(ideaID: Idea.ID) {
-        ideas.removeAll { $0.id == ideaID }
-        persistIdeasNow()
-    }
-
-    @discardableResult
-    func promoteIdeaToNote(ideaID: Idea.ID) -> Note.ID? {
-        guard let idx = ideas.firstIndex(where: { $0.id == ideaID }) else { return nil }
-        let note = Note(blocks: [TextBlock(x: 20, y: 20, text: ideas[idx].text)])
-        notes.insert(note, at: 0)
-        selection = note.id
-        ideas.remove(at: idx)
-        persistNow()
-        persistIdeasNow()
-        return note.id
-    }
-
-    func fileIdea(ideaID: Idea.ID, into noteID: Note.ID) {
-        guard let ideaIdx = ideas.firstIndex(where: { $0.id == ideaID }),
-              let noteIdx = notes.firstIndex(where: { $0.id == noteID }) else { return }
-        let y = notes[noteIdx].blocks.map(\.y).max().map { $0 + 40 } ?? 20
-        notes[noteIdx].blocks.append(TextBlock(x: 20, y: y, text: ideas[ideaIdx].text))
-        notes[noteIdx].updatedAt = Date()
-        ideas.remove(at: ideaIdx)
-        persistNow()
-        persistIdeasNow()
-    }
-
-    private func loadIdeas() {
-        guard let data = try? Data(contentsOf: ideasURL),
-              let decoded = try? JSONDecoder().decode([Idea].self, from: data) else { return }
-        ideas = decoded
-    }
-
-    private func persistIdeasNow() {
-        guard let data = try? JSONEncoder().encode(ideas) else { return }
-        try? data.write(to: ideasURL, options: .atomic)
-    }
 
     private func load() {
         guard let data = try? Data(contentsOf: fileURL),

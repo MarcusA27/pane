@@ -11,7 +11,6 @@ private let sidebarWidth: CGFloat = 282
 struct ContentView: View {
     @EnvironmentObject var store: NoteStore
     @State private var sidebarVisible = true
-    @State private var inboxOpen = false
     @AppStorage("hasSeenWelcome") private var hasSeenWelcome = false
 
     var body: some View {
@@ -32,36 +31,19 @@ struct ContentView: View {
 
     @ViewBuilder
     private var appShell: some View {
-        ZStack {
-            if inboxOpen {
-                InboxView()
-                    .transition(.opacity)
-            } else {
-                workspace
-                    .transition(.opacity)
-            }
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .animation(.easeInOut(duration: 0.28), value: inboxOpen)
-        .overlay(alignment: .bottomLeading) {
-            let overlayOpen = inboxOpen
-            GlassCircleButton {
-                if inboxOpen {
-                    inboxOpen = false
-                } else {
+        workspace
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .overlay(alignment: .bottomLeading) {
+                GlassCircleButton {
                     withAnimation(.easeInOut(duration: 0.28)) { sidebarVisible.toggle() }
+                } label: {
+                    Image(systemName: "sidebar.left")
                 }
-            } label: {
-                Image(systemName: overlayOpen ? "xmark" : "sidebar.left")
+                .keyboardShortcut("0", modifiers: .command)
+                .help("Toggle sidebar  ⌘0")
+                .padding(.leading, 14)
+                .padding(.bottom, 14)
             }
-            .keyboardShortcut("0", modifiers: .command)
-            .help(
-                overlayOpen ? "Back to notes  ⌘0" :
-                "Toggle sidebar  ⌘0"
-            )
-            .padding(.leading, 14)
-            .padding(.bottom, 14)
-        }
         .overlay(alignment: .top) {
             LinearGradient(
                 colors: [.white.opacity(0.06), .clear],
@@ -79,7 +61,7 @@ struct ContentView: View {
 
             if sidebarVisible {
                 HStack(spacing: 0) {
-                    Sidebar(onOpenInbox: { inboxOpen = true })
+                    Sidebar()
                     .frame(width: sidebarWidth)
                     .background(
                         VisualEffectView(material: .menu, blendingMode: .behindWindow)
@@ -114,7 +96,6 @@ struct DividerLine: View {
 struct Sidebar: View {
     @EnvironmentObject var store: NoteStore
     @Environment(\.undoManager) private var undoManager
-    var onOpenInbox: () -> Void
 
     private static let listTopInset: CGFloat = 10
 
@@ -136,39 +117,12 @@ struct Sidebar: View {
                     }
                 }
                 .padding(.horizontal, 10)
-                .padding(.bottom, 16)
+                .padding(.bottom, 58)
             }
             .scrollIndicators(.never)
             .scrollContentBackground(.hidden)
             .padding(.top, Self.listTopInset)
-
-            footer
         }
-    }
-
-    private var footer: some View {
-        let ideaCount = store.ideas.count
-        return HStack(spacing: 2) {
-            Spacer()
-            Button(action: onOpenInbox) {
-                HStack(spacing: 5) {
-                    Image(systemName: "tray")
-                        .font(.system(size: 13, weight: .medium))
-                    if ideaCount > 0 {
-                        Text("\(ideaCount)")
-                            .font(.system(size: 11, weight: .semibold))
-                    }
-                }
-                .foregroundStyle(.secondary)
-                .padding(.horizontal, 10)
-                .padding(.vertical, 6)
-                .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-            .help("Inbox")
-        }
-        .padding(.horizontal, 14)
-        .padding(.bottom, 14)
     }
 }
 

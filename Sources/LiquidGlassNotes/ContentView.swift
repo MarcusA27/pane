@@ -11,7 +11,6 @@ private let sidebarWidth: CGFloat = 282
 struct ContentView: View {
     @EnvironmentObject var store: NoteStore
     @State private var sidebarVisible = true
-    @State private var trashOpen = false
     @State private var inboxOpen = false
     @AppStorage("hasSeenWelcome") private var hasSeenWelcome = false
 
@@ -34,10 +33,7 @@ struct ContentView: View {
     @ViewBuilder
     private var appShell: some View {
         ZStack {
-            if trashOpen {
-                TrashView()
-                    .transition(.opacity)
-            } else if inboxOpen {
+            if inboxOpen {
                 InboxView()
                     .transition(.opacity)
             } else {
@@ -46,14 +42,11 @@ struct ContentView: View {
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .animation(.easeInOut(duration: 0.28), value: trashOpen)
         .animation(.easeInOut(duration: 0.28), value: inboxOpen)
         .overlay(alignment: .bottomLeading) {
-            let overlayOpen = trashOpen || inboxOpen
+            let overlayOpen = inboxOpen
             GlassCircleButton {
-                if trashOpen {
-                    trashOpen = false
-                } else if inboxOpen {
+                if inboxOpen {
                     inboxOpen = false
                 } else {
                     withAnimation(.easeInOut(duration: 0.28)) { sidebarVisible.toggle() }
@@ -86,10 +79,7 @@ struct ContentView: View {
 
             if sidebarVisible {
                 HStack(spacing: 0) {
-                    Sidebar(
-                        onOpenTrash: { trashOpen = true },
-                        onOpenInbox: { inboxOpen = true }
-                    )
+                    Sidebar(onOpenInbox: { inboxOpen = true })
                     .frame(width: sidebarWidth)
                     .background(
                         VisualEffectView(material: .menu, blendingMode: .behindWindow)
@@ -123,7 +113,7 @@ struct DividerLine: View {
 
 struct Sidebar: View {
     @EnvironmentObject var store: NoteStore
-    var onOpenTrash: () -> Void
+    @Environment(\.undoManager) private var undoManager
     var onOpenInbox: () -> Void
 
     private static let listTopInset: CGFloat = 10
@@ -138,7 +128,7 @@ struct Sidebar: View {
                             .onTapGesture { store.selection = note.id }
                             .contextMenu {
                                 Button(role: .destructive) {
-                                    store.softDelete(noteID: note.id)
+                                    store.softDelete(noteID: note.id, undoManager: undoManager)
                                 } label: {
                                     Label("Delete", systemImage: "trash")
                                 }
@@ -157,7 +147,6 @@ struct Sidebar: View {
     }
 
     private var footer: some View {
-        let deletedCount = store.deletedSortedNotes.count
         let ideaCount = store.ideas.count
         return HStack(spacing: 2) {
             Spacer()
@@ -177,23 +166,6 @@ struct Sidebar: View {
             }
             .buttonStyle(.plain)
             .help("Inbox")
-
-            Button(action: onOpenTrash) {
-                HStack(spacing: 5) {
-                    Image(systemName: "trash")
-                        .font(.system(size: 12, weight: .medium))
-                    if deletedCount > 0 {
-                        Text("\(deletedCount)")
-                            .font(.system(size: 11, weight: .semibold))
-                    }
-                }
-                .foregroundStyle(.secondary)
-                .padding(.horizontal, 10)
-                .padding(.vertical, 6)
-                .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-            .help("Deleted notes")
         }
         .padding(.horizontal, 14)
         .padding(.bottom, 14)

@@ -156,6 +156,7 @@ final class NoteStore: ObservableObject {
 
         load()
         loadIdeas()
+        purgeExpiredDeletes()
         if notes.isEmpty {
             let welcome = Note(
                 title: "Welcome",
@@ -177,12 +178,6 @@ final class NoteStore: ObservableObject {
         notes.filter { $0.deletedAt == nil }.sorted { $0.updatedAt > $1.updatedAt }
     }
 
-    var deletedSortedNotes: [Note] {
-        notes
-            .filter { $0.deletedAt != nil }
-            .sorted { ($0.deletedAt ?? .distantPast) > ($1.deletedAt ?? .distantPast) }
-    }
-
     @discardableResult
     func addNote() -> Note.ID {
         let note = Note()
@@ -190,6 +185,15 @@ final class NoteStore: ObservableObject {
         selection = note.id
         persistNow()
         return note.id
+    }
+
+    private static let deletedRetention: TimeInterval = 30 * 24 * 60 * 60
+
+    private func purgeExpiredDeletes() {
+        let cutoff = Date().addingTimeInterval(-Self.deletedRetention)
+        let before = notes.count
+        notes.removeAll { ($0.deletedAt ?? .distantFuture) < cutoff }
+        if notes.count != before { scheduleSave() }
     }
 
     func softDelete(noteID: Note.ID) {
@@ -205,10 +209,21 @@ final class NoteStore: ObservableObject {
         scheduleSave()
     }
 
-    func permanentlyDelete(noteID: Note.ID) {
-        notes.removeAll { $0.id == noteID }
-        if selection == noteID { selection = sortedNotes.first?.id }
-        scheduleSave()
+    func softDelete(noteID: Note.ID, undoManager: UndoManager?) {
+        softDelete(noteID: noteID)
+        undoManager?.registerUndo(withTarget: self) { store in
+            store.restore(noteID: noteID, undoManager: undoManager)
+        }
+        undoManager?.setActionName("Delete Note")
+    }
+
+    func restore(noteID: Note.ID, undoManager: UndoManager?) {
+        restore(noteID: noteID)
+        selection = noteID
+        undoManager?.registerUndo(withTarget: self) { store in
+            store.softDelete(noteID: noteID, undoManager: undoManager)
+        }
+        undoManager?.setActionName("Delete Note")
     }
 
     func setTitle(noteID: Note.ID, title: String) {

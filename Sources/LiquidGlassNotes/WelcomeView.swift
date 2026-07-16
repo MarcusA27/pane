@@ -12,13 +12,13 @@ struct WelcomeView: View {
             VStack(spacing: 24) {
                 Text("Pane")
                     .font(.system(size: 96, weight: .regular, design: .serif).italic())
-                    .foregroundStyle(Color(white: 0.12))
+                    .foregroundStyle(Ink.text)
                     .opacity(appeared ? 1 : 0)
                     .offset(y: appeared ? 0 : 12)
 
                 Text("a quiet place for notes")
                     .font(.system(size: 16, weight: .regular, design: .serif).italic())
-                    .foregroundStyle(Color(white: 0.12).opacity(0.65))
+                    .foregroundStyle(Ink.text.opacity(0.65))
                     .opacity(appeared ? 1 : 0)
 
                 VStack(alignment: .leading, spacing: 10) {
@@ -32,7 +32,7 @@ struct WelcomeView: View {
                 Button(action: onContinue) {
                     Text("Begin")
                         .font(.system(size: 14, weight: .regular, design: .serif).italic())
-                        .foregroundStyle(Color(white: 0.12))
+                        .foregroundStyle(Ink.text)
                         .padding(.horizontal, 26)
                         .padding(.vertical, 10)
                         .background(
@@ -66,11 +66,11 @@ struct WelcomeView: View {
         HStack(spacing: 12) {
             Image(systemName: icon)
                 .font(.system(size: 13, weight: .regular))
-                .foregroundStyle(Color(white: 0.12).opacity(0.55))
+                .foregroundStyle(Ink.text.opacity(0.55))
                 .frame(width: 18)
             Text(text)
                 .font(.system(size: 13.5, weight: .regular, design: .serif).italic())
-                .foregroundStyle(Color(white: 0.12).opacity(0.75))
+                .foregroundStyle(Ink.text.opacity(0.75))
         }
     }
 }

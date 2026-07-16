@@ -294,7 +294,7 @@ struct PlaybackCanvas: View {
             ForEach(frame.blocks) { block in
                 Text(block.text.isEmpty ? " " : block.text)
                     .font(.system(size: 15))
-                    .foregroundStyle(Color(white: 0.12))
+                    .foregroundStyle(Ink.text)
                     .shadow(color: .black.opacity(0.18), radius: 1.2, x: 0.5, y: 1.2)
                     .frame(maxWidth: 480, alignment: .topLeading)
                     .fixedSize(horizontal: false, vertical: true)
@@ -309,7 +309,7 @@ struct PlaybackCanvas: View {
         let path = smoothPath(perturbed)
         context.stroke(
             path,
-            with: .color(Color(white: 0.18).opacity(0.78)),
+            with: .color(Ink.stroke.opacity(0.78)),
             style: StrokeStyle(lineWidth: 1.4, lineCap: .round, lineJoin: .round, dash: [2.5, 0.35])
         )
     }

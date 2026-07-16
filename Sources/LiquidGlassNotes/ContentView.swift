@@ -868,7 +868,7 @@ struct AnnotationsLayer: View {
     var selectedStrokeIDs: Set<UUID> = []
     var selectionDragOffset: CGSize = .zero
 
-    private static let strokeColor = Color(white: 0.18)
+    private static let strokeColor = Ink.stroke
 
     var body: some View {
         Canvas { context, _ in

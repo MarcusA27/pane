@@ -128,20 +128,6 @@ struct Sidebar: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            HStack(alignment: .firstTextBaseline, spacing: 8) {
-                Text("Notes")
-                    .font(.system(size: 22, weight: .semibold, design: .rounded))
-                    .foregroundStyle(.primary)
-                Spacer()
-                GlassCircleButton { store.addNote() } label: {
-                    Image(systemName: "square.and.pencil")
-                }
-                .help("New Note  ⌘N")
-            }
-            .padding(.horizontal, 18)
-            .padding(.top, 14)
-            .padding(.bottom, 12)
-
             ScrollView {
                 LazyVStack(spacing: 4) {
                     ForEach(store.sortedNotes) { note in
@@ -158,6 +144,7 @@ struct Sidebar: View {
                     }
                 }
                 .padding(.horizontal, 10)
+                .padding(.top, 10)
                 .padding(.bottom, 16)
             }
             .scrollIndicators(.never)

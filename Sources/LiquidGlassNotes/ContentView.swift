@@ -126,6 +126,8 @@ struct Sidebar: View {
     var onOpenTrash: () -> Void
     var onOpenInbox: () -> Void
 
+    private static let listTopInset: CGFloat = 10
+
     var body: some View {
         VStack(spacing: 0) {
             ScrollView {
@@ -144,11 +146,11 @@ struct Sidebar: View {
                     }
                 }
                 .padding(.horizontal, 10)
-                .padding(.top, 10)
                 .padding(.bottom, 16)
             }
             .scrollIndicators(.never)
             .scrollContentBackground(.hidden)
+            .padding(.top, Self.listTopInset)
 
             footer
         }

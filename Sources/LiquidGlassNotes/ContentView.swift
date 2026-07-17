@@ -14,11 +14,22 @@ struct ContentView: View {
     @State private var searchVisible = false
     @State private var searchQuery = ""
     @State private var searchFocusTick = 0
+    @State private var settingsVisible = false
     @AppStorage("hasSeenWelcome") private var hasSeenWelcome = false
+    @AppStorage(GlassDefaults.sheenKey) private var glassSheen = GlassDefaults.sheen
+    @AppStorage(GlassDefaults.blurKey) private var glassBlur = GlassDefaults.blur
 
     var body: some View {
         ZStack {
             appShell
+
+            if settingsVisible {
+                SettingsPanel {
+                    withAnimation(.easeOut(duration: 0.18)) { settingsVisible = false }
+                }
+                .transition(.opacity)
+                .zIndex(3)
+            }
 
             if !hasSeenWelcome {
                 WelcomeView {
@@ -30,6 +41,12 @@ struct ContentView: View {
             }
         }
         .animation(.easeOut(duration: 0.45), value: hasSeenWelcome)
+        .onReceive(NotificationCenter.default.publisher(for: .togglePaneSettings)) { _ in
+            if !settingsVisible {
+                dismissSearch()
+            }
+            withAnimation(.easeOut(duration: 0.18)) { settingsVisible.toggle() }
+        }
     }
 
     @ViewBuilder
@@ -62,7 +79,7 @@ struct ContentView: View {
             )
         .overlay(alignment: .top) {
             LinearGradient(
-                colors: [.white.opacity(0.06), .clear],
+                colors: [.white.opacity(glassSheen * GlassDefaults.maxSheenOpacity), .clear],
                 startPoint: .top, endPoint: .bottom
             )
             .frame(height: 60)
@@ -86,6 +103,7 @@ struct ContentView: View {
                     .frame(width: sidebarWidth)
                     .background(
                         VisualEffectView(material: .menu, blendingMode: .behindWindow)
+                            .opacity(glassBlur)
                             .ignoresSafeArea()
                     )
                     DividerLine()

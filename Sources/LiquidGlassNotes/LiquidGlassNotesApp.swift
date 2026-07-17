@@ -23,14 +23,24 @@ struct LiquidGlassNotesApp: App {
         userDriverDelegate: nil
     )
 
+    @AppStorage(GlassDefaults.blurKey) private var glassBlur = GlassDefaults.blur
+    @AppStorage(GlassDefaults.frostKey) private var glassFrost = GlassDefaults.frost
+    @AppStorage(GlassDefaults.smokeKey) private var glassSmoke = GlassDefaults.smoke
+    @AppStorage(GlassDefaults.sheenKey) private var glassSheen = GlassDefaults.sheen
+
     var body: some Scene {
         WindowGroup {
             ContentView()
                 .environmentObject(store)
                 .frame(width: 820, height: 540)
                 .background(
-                    VisualEffectView(material: .hudWindow, blendingMode: .behindWindow)
-                        .ignoresSafeArea()
+                    ZStack {
+                        VisualEffectView(material: .hudWindow, blendingMode: .behindWindow)
+                            .opacity(glassBlur)
+                        Color.white.opacity(glassFrost * GlassDefaults.maxFrostOpacity)
+                        Color.black.opacity(glassSmoke * GlassDefaults.maxSmokeOpacity)
+                    }
+                    .ignoresSafeArea()
                 )
                 .background(WindowConfigurator())
         }
@@ -40,6 +50,18 @@ struct LiquidGlassNotesApp: App {
             CommandGroup(replacing: .newItem) {
                 Button("New Note") { store.addNote() }
                     .keyboardShortcut("n", modifiers: .command)
+            }
+            CommandGroup(replacing: .appSettings) {
+                Button("Settings…") {
+                    NotificationCenter.default.post(name: .togglePaneSettings, object: nil)
+                }
+                .keyboardShortcut(",", modifiers: .command)
+                Button("Reset Glass") {
+                    glassBlur = GlassDefaults.blur
+                    glassFrost = GlassDefaults.frost
+                    glassSmoke = GlassDefaults.smoke
+                    glassSheen = GlassDefaults.sheen
+                }
             }
             CommandGroup(after: .appInfo) {
                 CheckForUpdatesView(updater: updaterController.updater)

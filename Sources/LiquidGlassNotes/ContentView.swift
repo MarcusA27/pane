@@ -214,8 +214,12 @@ struct Sidebar: View {
                 )
         )
         .background(
-            EscapeKeyWatcher { onDismissSearch() }
-                .frame(width: 0, height: 0)
+            SearchKeyWatcher(
+                isFieldFocused: searchFocused,
+                undoManager: undoManager,
+                onEscape: onDismissSearch
+            )
+            .frame(width: 0, height: 0)
         )
         .onAppear { searchFocused = true }
     }
@@ -1081,20 +1085,29 @@ struct BlockView: View {
     }
 }
 
-/// Consumes Escape while the search field exists. The AppKit field editor
-/// swallows Escape before SwiftUI's keyboardShortcut/onKeyPress see it, so
-/// a local event monitor is the only reliable hook.
-struct EscapeKeyWatcher: NSViewRepresentable {
+/// Key handling the search field can't do itself. The AppKit field editor
+/// swallows Escape before SwiftUI's keyboardShortcut/onKeyPress see it, and
+/// it shadows the window's undo manager with its own text-undo buffer, so a
+/// local event monitor is the only reliable hook for either.
+struct SearchKeyWatcher: NSViewRepresentable {
+    var isFieldFocused: Bool
+    var undoManager: UndoManager?
     var onEscape: () -> Void
 
     func makeNSView(context: Context) -> NSView {
-        context.coordinator.onEscape = onEscape
+        update(context.coordinator)
         context.coordinator.install()
         return NSView()
     }
 
     func updateNSView(_ nsView: NSView, context: Context) {
-        context.coordinator.onEscape = onEscape
+        update(context.coordinator)
+    }
+
+    private func update(_ coordinator: Coordinator) {
+        coordinator.isFieldFocused = isFieldFocused
+        coordinator.undoManager = undoManager
+        coordinator.onEscape = onEscape
     }
 
     static func dismantleNSView(_ nsView: NSView, coordinator: Coordinator) {
@@ -1104,14 +1117,32 @@ struct EscapeKeyWatcher: NSViewRepresentable {
     func makeCoordinator() -> Coordinator { Coordinator() }
 
     final class Coordinator {
+        var isFieldFocused = false
+        var undoManager: UndoManager?
         var onEscape: (() -> Void)?
         private var monitor: Any?
 
         func install() {
             monitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
-                guard let self, event.keyCode == 53 else { return event }
-                self.onEscape?()
-                return nil
+                guard let self else { return event }
+                if event.keyCode == 53 {
+                    self.onEscape?()
+                    return nil
+                }
+                guard self.isFieldFocused,
+                      event.modifierFlags.contains(.command),
+                      event.charactersIgnoringModifiers?.lowercased() == "z",
+                      let undoManager = self.undoManager else { return event }
+                if event.modifierFlags.contains(.shift) {
+                    if undoManager.canRedo {
+                        undoManager.redo()
+                        return nil
+                    }
+                } else if undoManager.canUndo {
+                    undoManager.undo()
+                    return nil
+                }
+                return event
             }
         }
 

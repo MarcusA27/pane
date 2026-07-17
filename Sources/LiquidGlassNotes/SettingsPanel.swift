@@ -4,6 +4,19 @@ extension Notification.Name {
     static let togglePaneSettings = Notification.Name("togglePaneSettings")
 }
 
+enum PaneTheme {
+    static let key = "paneTheme"
+    static let systemValue = "system"
+
+    static func apply(_ raw: String) {
+        switch raw {
+        case "light": NSApp.appearance = NSAppearance(named: .aqua)
+        case "dark": NSApp.appearance = NSAppearance(named: .darkAqua)
+        default: NSApp.appearance = nil
+        }
+    }
+}
+
 enum GlassDefaults {
     static let blurKey = "glassBlur"
     static let frostKey = "glassFrost"
@@ -33,6 +46,7 @@ struct SettingsPanel: View {
     @AppStorage(GlassDefaults.sidebarFrostKey) private var sidebarFrost = GlassDefaults.frost
     @AppStorage(GlassDefaults.sidebarSmokeKey) private var sidebarSmoke = GlassDefaults.smoke
     @AppStorage(GlassDefaults.sheenKey) private var sheen = GlassDefaults.sheen
+    @AppStorage(PaneTheme.key) private var theme = PaneTheme.systemValue
 
     private var isDefault: Bool {
         blur == GlassDefaults.blur
@@ -42,6 +56,7 @@ struct SettingsPanel: View {
             && sidebarFrost == GlassDefaults.frost
             && sidebarSmoke == GlassDefaults.smoke
             && sheen == GlassDefaults.sheen
+            && theme == PaneTheme.systemValue
     }
 
     var body: some View {
@@ -51,14 +66,23 @@ struct SettingsPanel: View {
                 .onTapGesture { onClose() }
 
             VStack(spacing: 0) {
-                Text("Glass")
+                Text("Appearance")
                     .font(.system(size: 22, weight: .regular, design: .serif).italic())
                     .foregroundStyle(Ink.text)
                     .padding(.top, 24)
                     .padding(.bottom, 16)
 
                 VStack(alignment: .leading, spacing: 12) {
+                    sectionLabel("Theme")
+                    HStack(spacing: 6) {
+                        themeChoice("System", value: PaneTheme.systemValue)
+                        themeChoice("Light", value: "light")
+                        themeChoice("Dark", value: "dark")
+                    }
+                    .frame(maxWidth: .infinity)
+
                     sectionLabel("Canvas")
+                        .padding(.top, 8)
                     glassSlider("Blur", value: $blur)
                     glassSlider("Frost", value: $frost)
                     glassSlider("Smoke", value: $smoke)
@@ -84,6 +108,7 @@ struct SettingsPanel: View {
                             sidebarFrost = GlassDefaults.frost
                             sidebarSmoke = GlassDefaults.smoke
                             sheen = GlassDefaults.sheen
+                            theme = PaneTheme.systemValue
                         }
                     }
                     .buttonStyle(.plain)
@@ -139,6 +164,27 @@ struct SettingsPanel: View {
                 .opacity(0)
                 .frame(width: 0, height: 0)
         )
+    }
+
+    @ViewBuilder
+    private func themeChoice(_ label: String, value: String) -> some View {
+        let isSelected = theme == value
+        Button {
+            theme = value
+        } label: {
+            Text(label)
+                .font(.system(size: 12, weight: .regular, design: .serif).italic())
+                .foregroundStyle(Ink.text.opacity(isSelected ? 1 : 0.55))
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 6)
+                .background(
+                    Capsule().fill(.white.opacity(isSelected ? 0.24 : 0))
+                        .overlay(
+                            Capsule().strokeBorder(.white.opacity(isSelected ? 0.35 : 0), lineWidth: 0.5)
+                        )
+                )
+        }
+        .buttonStyle(.plain)
     }
 
     @ViewBuilder

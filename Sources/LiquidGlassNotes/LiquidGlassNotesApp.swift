@@ -6,6 +6,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.regular)
         NSApp.activate(ignoringOtherApps: true)
+        PaneTheme.apply(UserDefaults.standard.string(forKey: PaneTheme.key) ?? PaneTheme.systemValue)
     }
 
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
@@ -30,12 +31,16 @@ struct LiquidGlassNotesApp: App {
     @AppStorage(GlassDefaults.sidebarBlurKey) private var sidebarBlur = GlassDefaults.blur
     @AppStorage(GlassDefaults.sidebarFrostKey) private var sidebarFrost = GlassDefaults.frost
     @AppStorage(GlassDefaults.sidebarSmokeKey) private var sidebarSmoke = GlassDefaults.smoke
+    @AppStorage(PaneTheme.key) private var theme = PaneTheme.systemValue
 
     var body: some Scene {
         WindowGroup {
             ContentView()
                 .environmentObject(store)
                 .frame(width: 820, height: 540)
+                .onChange(of: theme) { _, newTheme in
+                    PaneTheme.apply(newTheme)
+                }
                 .background(
                     ZStack {
                         VisualEffectView(material: .hudWindow, blendingMode: .behindWindow)
@@ -59,7 +64,7 @@ struct LiquidGlassNotesApp: App {
                     NotificationCenter.default.post(name: .togglePaneSettings, object: nil)
                 }
                 .keyboardShortcut(",", modifiers: .command)
-                Button("Reset Glass") {
+                Button("Reset Appearance") {
                     glassBlur = GlassDefaults.blur
                     glassFrost = GlassDefaults.frost
                     glassSmoke = GlassDefaults.smoke
@@ -67,6 +72,7 @@ struct LiquidGlassNotesApp: App {
                     sidebarBlur = GlassDefaults.blur
                     sidebarFrost = GlassDefaults.frost
                     sidebarSmoke = GlassDefaults.smoke
+                    theme = PaneTheme.systemValue
                 }
             }
             CommandGroup(after: .appInfo) {

@@ -27,6 +27,9 @@ struct LiquidGlassNotesApp: App {
     @AppStorage(GlassDefaults.frostKey) private var glassFrost = GlassDefaults.frost
     @AppStorage(GlassDefaults.smokeKey) private var glassSmoke = GlassDefaults.smoke
     @AppStorage(GlassDefaults.sheenKey) private var glassSheen = GlassDefaults.sheen
+    @AppStorage(GlassDefaults.sidebarBlurKey) private var sidebarBlur = GlassDefaults.blur
+    @AppStorage(GlassDefaults.sidebarFrostKey) private var sidebarFrost = GlassDefaults.frost
+    @AppStorage(GlassDefaults.sidebarSmokeKey) private var sidebarSmoke = GlassDefaults.smoke
 
     var body: some Scene {
         WindowGroup {
@@ -61,6 +64,9 @@ struct LiquidGlassNotesApp: App {
                     glassFrost = GlassDefaults.frost
                     glassSmoke = GlassDefaults.smoke
                     glassSheen = GlassDefaults.sheen
+                    sidebarBlur = GlassDefaults.blur
+                    sidebarFrost = GlassDefaults.frost
+                    sidebarSmoke = GlassDefaults.smoke
                 }
             }
             CommandGroup(after: .appInfo) {

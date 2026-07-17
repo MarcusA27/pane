@@ -17,7 +17,9 @@ struct ContentView: View {
     @State private var settingsVisible = false
     @AppStorage("hasSeenWelcome") private var hasSeenWelcome = false
     @AppStorage(GlassDefaults.sheenKey) private var glassSheen = GlassDefaults.sheen
-    @AppStorage(GlassDefaults.blurKey) private var glassBlur = GlassDefaults.blur
+    @AppStorage(GlassDefaults.sidebarBlurKey) private var sidebarBlur = GlassDefaults.blur
+    @AppStorage(GlassDefaults.sidebarFrostKey) private var sidebarFrost = GlassDefaults.frost
+    @AppStorage(GlassDefaults.sidebarSmokeKey) private var sidebarSmoke = GlassDefaults.smoke
 
     var body: some View {
         ZStack {
@@ -102,9 +104,13 @@ struct ContentView: View {
                     )
                     .frame(width: sidebarWidth)
                     .background(
-                        VisualEffectView(material: .menu, blendingMode: .behindWindow)
-                            .opacity(glassBlur)
-                            .ignoresSafeArea()
+                        ZStack {
+                            VisualEffectView(material: .menu, blendingMode: .behindWindow)
+                                .opacity(sidebarBlur)
+                            Color.white.opacity(sidebarFrost * GlassDefaults.maxFrostOpacity)
+                            Color.black.opacity(sidebarSmoke * GlassDefaults.maxSmokeOpacity)
+                        }
+                        .ignoresSafeArea()
                     )
                     DividerLine()
                 }

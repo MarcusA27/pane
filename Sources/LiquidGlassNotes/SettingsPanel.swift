@@ -48,6 +48,10 @@ struct SettingsPanel: View {
     @AppStorage(GlassDefaults.sheenKey) private var sheen = GlassDefaults.sheen
     @AppStorage(PaneTheme.key) private var theme = PaneTheme.systemValue
 
+    private static let labelColumnWidth: CGFloat = 46
+    private static let themeSegmentWidth: CGFloat = 46
+    private static let themeSegmentSpacing: CGFloat = 2
+
     private var isDefault: Bool {
         blur == GlassDefaults.blur
             && frost == GlassDefaults.frost
@@ -66,75 +70,66 @@ struct SettingsPanel: View {
                 .onTapGesture { onClose() }
 
             VStack(spacing: 0) {
-                Text("Appearance")
-                    .font(.system(size: 22, weight: .regular, design: .serif).italic())
-                    .foregroundStyle(Ink.text)
-                    .padding(.top, 24)
-                    .padding(.bottom, 16)
+                themePicker
+                    .padding(.top, 26)
+                    .padding(.bottom, 24)
 
-                VStack(alignment: .leading, spacing: 12) {
-                    sectionLabel("Theme")
-                    HStack(spacing: 6) {
-                        themeChoice("System", value: PaneTheme.systemValue)
-                        themeChoice("Light", value: "light")
-                        themeChoice("Dark", value: "dark")
+                Grid(alignment: .leading, horizontalSpacing: 16, verticalSpacing: 13) {
+                    GridRow {
+                        Color.clear
+                            .frame(width: Self.labelColumnWidth, height: 1)
+                        columnHeader("Canvas")
+                        columnHeader("Sidebar")
                     }
-                    .frame(maxWidth: .infinity)
-
-                    sectionLabel("Canvas")
-                        .padding(.top, 8)
-                    glassSlider("Blur", value: $blur)
-                    glassSlider("Frost", value: $frost)
-                    glassSlider("Smoke", value: $smoke)
-
-                    sectionLabel("Sidebar")
-                        .padding(.top, 8)
-                    glassSlider("Blur", value: $sidebarBlur)
-                    glassSlider("Frost", value: $sidebarFrost)
-                    glassSlider("Smoke", value: $sidebarSmoke)
-
-                    glassSlider("Sheen", value: $sheen)
-                        .padding(.top, 8)
+                    GridRow {
+                        rowLabel("Blur")
+                        GlassSlider(value: $blur)
+                        GlassSlider(value: $sidebarBlur)
+                    }
+                    GridRow {
+                        rowLabel("Frost")
+                        GlassSlider(value: $frost)
+                        GlassSlider(value: $sidebarFrost)
+                    }
+                    GridRow {
+                        rowLabel("Smoke")
+                        GlassSlider(value: $smoke)
+                        GlassSlider(value: $sidebarSmoke)
+                    }
+                    GridRow {
+                        rowLabel("Sheen")
+                            .padding(.top, 9)
+                        GlassSlider(value: $sheen)
+                            .gridCellColumns(2)
+                            .padding(.top, 9)
+                    }
                 }
-                .padding(.horizontal, 26)
-
-                HStack {
-                    Button("Reset") {
-                        withAnimation(.easeOut(duration: 0.2)) {
-                            blur = GlassDefaults.blur
-                            frost = GlassDefaults.frost
-                            smoke = GlassDefaults.smoke
-                            sidebarBlur = GlassDefaults.blur
-                            sidebarFrost = GlassDefaults.frost
-                            sidebarSmoke = GlassDefaults.smoke
-                            sheen = GlassDefaults.sheen
-                            theme = PaneTheme.systemValue
-                        }
-                    }
-                    .buttonStyle(.plain)
-                    .font(.system(size: 12, weight: .regular, design: .serif).italic())
-                    .foregroundStyle(Ink.text.opacity(isDefault ? 0.3 : 0.7))
-                    .disabled(isDefault)
-
-                    Spacer()
-
-                    Button("Done") { onClose() }
-                        .buttonStyle(.plain)
-                        .font(.system(size: 12, weight: .regular, design: .serif).italic())
-                        .foregroundStyle(Ink.text)
-                        .padding(.horizontal, 18)
-                        .padding(.vertical, 7)
-                        .background(
-                            Capsule().fill(.white.opacity(0.20))
-                                .overlay(Capsule().strokeBorder(.white.opacity(0.30), lineWidth: 0.5))
+                .padding(.horizontal, 18)
+                .padding(.vertical, 16)
+                .background(
+                    // Recessed well: dark fill with an inner shadow at the top
+                    // edge and a faint light rim, so the slider matrix reads
+                    // as carved into the panel.
+                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                        .fill(
+                            Color.black.opacity(0.10)
+                                .shadow(.inner(color: .black.opacity(0.22), radius: 3, x: 0, y: 1.5))
                         )
-                        .keyboardShortcut(.defaultAction)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                .strokeBorder(.white.opacity(0.10), lineWidth: 0.5)
+                        )
+                )
+                .padding(.horizontal, 46)
+
+                HStack(spacing: 10) {
+                    resetButton
+                    doneButton
                 }
-                .padding(.horizontal, 26)
-                .padding(.top, 22)
+                .padding(.top, 26)
                 .padding(.bottom, 22)
             }
-            .frame(width: 340)
+            .frame(width: 480)
             .background(
                 RoundedRectangle(cornerRadius: 18, style: .continuous)
                     .fill(.white.opacity(0.16))
@@ -166,50 +161,165 @@ struct SettingsPanel: View {
         )
     }
 
-    @ViewBuilder
-    private func themeChoice(_ label: String, value: String) -> some View {
-        let isSelected = theme == value
-        Button {
-            theme = value
-        } label: {
-            Text(label)
-                .font(.system(size: 12, weight: .regular, design: .serif).italic())
-                .foregroundStyle(Ink.text.opacity(isSelected ? 1 : 0.55))
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 6)
-                .background(
-                    Capsule().fill(.white.opacity(isSelected ? 0.24 : 0))
-                        .overlay(
-                            Capsule().strokeBorder(.white.opacity(isSelected ? 0.35 : 0), lineWidth: 0.5)
-                        )
-                )
+    private var resetButton: some View {
+        Button("reset") {
+            withAnimation(.easeOut(duration: 0.2)) {
+                blur = GlassDefaults.blur
+                frost = GlassDefaults.frost
+                smoke = GlassDefaults.smoke
+                sidebarBlur = GlassDefaults.blur
+                sidebarFrost = GlassDefaults.frost
+                sidebarSmoke = GlassDefaults.smoke
+                sheen = GlassDefaults.sheen
+                theme = PaneTheme.systemValue
+            }
         }
         .buttonStyle(.plain)
+        .font(.custom("Helvetica Neue", size: 12.5))
+        .foregroundStyle(Ink.text.opacity(isDefault ? 0.3 : 0.8))
+        .padding(.horizontal, 16)
+        .padding(.vertical, 7)
+        .background(
+            Capsule().strokeBorder(Ink.text.opacity(isDefault ? 0.10 : 0.22), lineWidth: 0.5)
+        )
+        .disabled(isDefault)
     }
 
-    @ViewBuilder
-    private func sectionLabel(_ text: String) -> some View {
-        Text(text)
-            .font(.system(size: 11, weight: .medium))
-            .kerning(1.1)
-            .textCase(.uppercase)
-            .foregroundStyle(Ink.text.opacity(0.42))
+    private var doneButton: some View {
+        Button("done") { onClose() }
+            .buttonStyle(.plain)
+            .font(.custom("Helvetica Neue", size: 12.5))
+            .foregroundStyle(Ink.text)
+            .padding(.horizontal, 18)
+            .padding(.vertical, 7)
+            .background(
+                Capsule().fill(.white.opacity(0.30))
+                    .overlay(
+                        Capsule().strokeBorder(
+                            LinearGradient(
+                                colors: [.white.opacity(0.65), .white.opacity(0.15)],
+                                startPoint: .topLeading, endPoint: .bottomTrailing
+                            ),
+                            lineWidth: 0.8
+                        )
+                    )
+                    .shadow(color: .black.opacity(0.12), radius: 5, x: 0, y: 2)
+            )
+            .keyboardShortcut(.defaultAction)
     }
 
-    @ViewBuilder
-    private func glassSlider(_ label: String, value: Binding<Double>) -> some View {
-        HStack(spacing: 12) {
-            Text(label)
-                .font(.system(size: 13, weight: .regular, design: .serif).italic())
-                .foregroundStyle(Ink.text.opacity(0.75))
-                .frame(width: 52, alignment: .leading)
-            Slider(value: value, in: 0...1)
-                .controlSize(.small)
-            Text("\(Int((value.wrappedValue * 100).rounded()))")
-                .font(.system(size: 10.5, weight: .medium))
-                .monospacedDigit()
-                .foregroundStyle(Ink.text.opacity(0.5))
-                .frame(width: 26, alignment: .trailing)
+    private var themeIndex: Int {
+        switch theme {
+        case "light": return 1
+        case "dark": return 2
+        default: return 0
         }
+    }
+
+    private var themePicker: some View {
+        HStack(spacing: Self.themeSegmentSpacing) {
+            themeChoice("circle.lefthalf.filled", value: PaneTheme.systemValue, help: "Match the system")
+            themeChoice("sun.max", value: "light", help: "Light")
+            themeChoice("moon", value: "dark", help: "Dark")
+        }
+        .padding(3)
+        .background(alignment: .leading) {
+            // One persistent capsule that slides between segments; a moving
+            // view animates reliably where a matched remove/insert pair
+            // gets swallowed by the appearance-change rebuild.
+            Capsule().fill(.white.opacity(0.38))
+                .overlay(
+                    Capsule().strokeBorder(
+                        LinearGradient(
+                            colors: [.white.opacity(0.75), .white.opacity(0.18)],
+                            startPoint: .topLeading, endPoint: .bottomTrailing
+                        ),
+                        lineWidth: 0.8
+                    )
+                )
+                .shadow(color: .black.opacity(0.16), radius: 6, x: 0, y: 2)
+                .frame(width: Self.themeSegmentWidth)
+                .padding(.vertical, 3)
+                .offset(x: 3 + CGFloat(themeIndex) * (Self.themeSegmentWidth + Self.themeSegmentSpacing))
+        }
+        .background(
+            Capsule().fill(.white.opacity(0.10))
+                .overlay(Capsule().strokeBorder(.white.opacity(0.22), lineWidth: 0.5))
+        )
+    }
+
+    @ViewBuilder
+    private func themeChoice(_ systemName: String, value: String, help: String) -> some View {
+        let isSelected = theme == value
+        Button {
+            withAnimation(.spring(response: 0.32, dampingFraction: 0.78)) { theme = value }
+        } label: {
+            Image(systemName: systemName)
+                .font(.system(size: 13, weight: .medium))
+                .foregroundStyle(Ink.text.opacity(isSelected ? 1 : 0.5))
+                .frame(width: Self.themeSegmentWidth)
+                .padding(.vertical, 6)
+        }
+        .buttonStyle(.plain)
+        .help(help)
+    }
+
+    @ViewBuilder
+    private func columnHeader(_ text: String) -> some View {
+        Text(text)
+            .font(.custom("Helvetica Neue", size: 13))
+            .textCase(.lowercase)
+            .foregroundStyle(Ink.text.opacity(0.8))
+            .shadow(color: .black.opacity(0.22), radius: 1.2, x: 0, y: 1)
+            .frame(maxWidth: .infinity)
+    }
+
+    @ViewBuilder
+    private func rowLabel(_ text: String) -> some View {
+        Text(text)
+            .font(.custom("Helvetica Neue", size: 13))
+            .textCase(.lowercase)
+            .foregroundStyle(Ink.text.opacity(0.8))
+            .shadow(color: .black.opacity(0.22), radius: 1.2, x: 0, y: 1)
+            .frame(width: Self.labelColumnWidth, alignment: .center)
+    }
+}
+
+/// Knobless glass trough in the same language as the playback scrub bar:
+/// the white fill is the value, resting in a carved channel. No numeric
+/// readout — the glass behind the panel is the readout.
+struct GlassSlider: View {
+    @Binding var value: Double
+
+    private static let troughHeight: CGFloat = 9
+    private static let fillInset: CGFloat = 1.5
+
+    var body: some View {
+        GeometryReader { geo in
+            let width = geo.size.width
+
+            ZStack(alignment: .leading) {
+                Capsule()
+                    .fill(.black.opacity(0.10))
+                    .overlay(Capsule().strokeBorder(.black.opacity(0.07), lineWidth: 0.5))
+                Capsule()
+                    .fill(.white.opacity(0.78))
+                    .frame(width: max(Self.troughHeight - 2 * Self.fillInset,
+                                      (width - 2 * Self.fillInset) * CGFloat(value)))
+                    .shadow(color: .black.opacity(0.12), radius: 1.5, x: 0, y: 0.5)
+                    .padding(Self.fillInset)
+            }
+            .frame(height: Self.troughHeight)
+            .frame(maxHeight: .infinity, alignment: .center)
+            .contentShape(Rectangle())
+            .gesture(
+                DragGesture(minimumDistance: 0)
+                    .onChanged { v in
+                        guard width > 0 else { return }
+                        value = min(max(0, v.location.x / width), 1)
+                    }
+            )
+        }
+        .frame(height: 22)
     }
 }

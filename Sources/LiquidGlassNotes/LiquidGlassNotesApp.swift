@@ -64,8 +64,10 @@ struct LiquidGlassNotesApp: App {
         .windowResizability(.contentMinSize)
         .commands {
             CommandGroup(replacing: .newItem) {
-                Button("New Note") { store.addNote() }
-                    .keyboardShortcut("n", modifiers: .command)
+                Button("New Note") {
+                    NotificationCenter.default.post(name: .requestNewNote, object: nil)
+                }
+                .keyboardShortcut("n", modifiers: .command)
             }
             CommandGroup(replacing: .appSettings) {
                 Button("Settings…") {

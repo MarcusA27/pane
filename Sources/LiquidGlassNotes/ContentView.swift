@@ -15,6 +15,7 @@ struct ContentView: View {
     @State private var searchQuery = ""
     @State private var searchFocusTick = 0
     @State private var settingsVisible = false
+    @State private var newNoteChooserVisible = false
     @AppStorage("hasSeenWelcome") private var hasSeenWelcome = false
     @AppStorage(GlassDefaults.sheenKey) private var glassSheen = GlassDefaults.sheen
     @AppStorage(GlassDefaults.sidebarBlurKey) private var sidebarBlur = GlassDefaults.blur
@@ -33,6 +34,20 @@ struct ContentView: View {
                 .zIndex(3)
             }
 
+            if newNoteChooserVisible {
+                NewNoteChooser(
+                    onChoose: { layout in
+                        withAnimation(.easeOut(duration: 0.18)) { newNoteChooserVisible = false }
+                        store.addNote(layout: layout)
+                    },
+                    onCancel: {
+                        withAnimation(.easeOut(duration: 0.18)) { newNoteChooserVisible = false }
+                    }
+                )
+                .transition(.opacity)
+                .zIndex(4)
+            }
+
             if !hasSeenWelcome {
                 WelcomeView {
                     withAnimation(.easeOut(duration: 0.45)) {
@@ -48,6 +63,10 @@ struct ContentView: View {
                 dismissSearch()
             }
             withAnimation(.easeOut(duration: 0.18)) { settingsVisible.toggle() }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .requestNewNote)) { _ in
+            dismissSearch()
+            withAnimation(.easeOut(duration: 0.18)) { newNoteChooserVisible = true }
         }
     }
 
@@ -345,7 +364,9 @@ struct EmptyStatePrompt: View {
             Text("No Note Selected")
                 .font(.system(size: 16, weight: .medium))
                 .foregroundStyle(.secondary)
-            Button("New Note") { store.addNote() }
+            Button("New Note") {
+                NotificationCenter.default.post(name: .requestNewNote, object: nil)
+            }
                 .buttonStyle(.plain)
                 .padding(.horizontal, 14)
                 .padding(.vertical, 7)
@@ -382,6 +403,7 @@ final class CanvasUndo: ObservableObject {
 }
 
 struct Editor: View {
+    @EnvironmentObject var store: NoteStore
     @Binding var note: Note
     @State private var focusedBlock: UUID?
     @State private var tool: Tool = .text
@@ -409,6 +431,76 @@ struct Editor: View {
 
     @ViewBuilder
     private var editingView: some View {
+        layoutContent
+            .overlay(alignment: .topLeading) {
+                if note.hasPlayback {
+                    Button {
+                        flushAllPendingRuns()
+                        isPlaying = true
+                    } label: {
+                        Image(systemName: "play.fill")
+                            .font(.system(size: 12, weight: .medium))
+                            .foregroundStyle(.primary)
+                            .frame(width: 26, height: 26)
+                    }
+                    .buttonStyle(.plain)
+                    .help("Play timelapse")
+                    .padding(.leading, 16)
+                    .padding(.top, 14)
+                }
+            }
+            .overlay(alignment: .topTrailing) {
+                Text(note.updatedAt, format: .dateTime.weekday(.wide).month().day().year().hour().minute())
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundStyle(.secondary)
+                    .padding(.trailing, 16)
+                    .padding(.top, 18)
+            }
+            .onDisappear {
+                flushAllPendingRuns()
+            }
+    }
+
+    @ViewBuilder
+    private var layoutContent: some View {
+        if note.layout == .lined {
+            linedContent
+        } else {
+            freeformContent
+        }
+    }
+
+    private var linedTextBinding: Binding<String> {
+        Binding(
+            get: { note.blocks.first?.text ?? "" },
+            set: { newValue in
+                if note.blocks.isEmpty {
+                    note.blocks = [TextBlock(x: 0, y: 0, text: newValue)]
+                } else {
+                    note.blocks[0].text = newValue
+                }
+            }
+        )
+    }
+
+    private var linedContent: some View {
+        LinedTextView(
+            text: linedTextBinding,
+            onTextChanged: { newText in
+                if let id = note.blocks.first?.id {
+                    scheduleTextRun(blockID: id, text: newText)
+                }
+            }
+        )
+        .padding(.leading, 34)
+        .padding(.trailing, 20)
+        .padding(.top, 52)
+        .padding(.bottom, 16)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+    }
+
+    @ViewBuilder
+    private var freeformContent: some View {
         ScratchCanvas(
             blocks: $note.blocks,
             annotations: $note.annotations,
@@ -435,32 +527,6 @@ struct Editor: View {
         )
         .padding(4)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-        .overlay(alignment: .topLeading) {
-            HStack(spacing: 10) {
-                if note.hasPlayback {
-                    Button {
-                        flushAllPendingRuns()
-                        isPlaying = true
-                    } label: {
-                        Image(systemName: "play.fill")
-                            .font(.system(size: 12, weight: .medium))
-                            .foregroundStyle(.primary)
-                            .frame(width: 26, height: 26)
-                    }
-                    .buttonStyle(.plain)
-                    .help("Play timelapse")
-                }
-            }
-            .padding(.leading, 16)
-            .padding(.top, 14)
-        }
-        .overlay(alignment: .topTrailing) {
-            Text(note.updatedAt, format: .dateTime.weekday(.wide).month().day().year().hour().minute())
-                .font(.system(size: 11, weight: .medium))
-                .foregroundStyle(.secondary)
-                .padding(.trailing, 16)
-                .padding(.top, 18)
-        }
         .onChange(of: focusedBlock) { oldID, newID in
             if let newID, lastRecordedText[newID] == nil,
                let block = note.blocks.first(where: { $0.id == newID }) {
@@ -472,9 +538,6 @@ struct Editor: View {
             if newTool != .text {
                 focusedBlock = nil
             }
-        }
-        .onDisappear {
-            flushAllPendingRuns()
         }
         .background(
             CommandKeyWatcher { commandDown in

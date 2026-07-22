@@ -13,6 +13,13 @@ struct Stroke: Identifiable, Codable, Hashable {
     var points: [CGPoint]
 }
 
+/// How a note is edited. `freeform` is the spatial canvas (type anywhere,
+/// draw, place blocks); `lined` is a traditional top-to-bottom text column.
+enum NoteLayout: String, Codable {
+    case freeform
+    case lined
+}
+
 enum EditEvent: Codable, Hashable {
     case blockCreated(blockID: UUID, x: Double, y: Double, at: Date)
     case blockTextRun(blockID: UUID, text: String, at: Date)
@@ -42,6 +49,7 @@ struct Note: Identifiable, Codable, Hashable {
     var history: [EditEvent] = []
     var updatedAt: Date = Date()
     var deletedAt: Date? = nil
+    var layout: NoteLayout = .lined
 
     init(id: UUID = UUID(),
          title: String = "",
@@ -49,7 +57,8 @@ struct Note: Identifiable, Codable, Hashable {
          annotations: [Stroke] = [],
          history: [EditEvent] = [],
          updatedAt: Date = Date(),
-         deletedAt: Date? = nil) {
+         deletedAt: Date? = nil,
+         layout: NoteLayout = .lined) {
         self.id = id
         self.title = title
         self.blocks = blocks
@@ -57,10 +66,11 @@ struct Note: Identifiable, Codable, Hashable {
         self.history = history
         self.updatedAt = updatedAt
         self.deletedAt = deletedAt
+        self.layout = layout
     }
 
     private enum CodingKeys: String, CodingKey {
-        case id, title, blocks, annotations, history, updatedAt, body, deletedAt
+        case id, title, blocks, annotations, history, updatedAt, body, deletedAt, layout
     }
 
     init(from decoder: Decoder) throws {
@@ -71,6 +81,8 @@ struct Note: Identifiable, Codable, Hashable {
         self.annotations = try c.decodeIfPresent([Stroke].self, forKey: .annotations) ?? []
         self.history = try c.decodeIfPresent([EditEvent].self, forKey: .history) ?? []
         self.deletedAt = try c.decodeIfPresent(Date.self, forKey: .deletedAt)
+        // Notes saved before layouts existed were all freeform.
+        self.layout = try c.decodeIfPresent(NoteLayout.self, forKey: .layout) ?? .freeform
         if let blocks = try c.decodeIfPresent([TextBlock].self, forKey: .blocks) {
             self.blocks = blocks
         } else if let body = try c.decodeIfPresent(String.self, forKey: .body),
@@ -90,10 +102,18 @@ struct Note: Identifiable, Codable, Hashable {
         try c.encode(history, forKey: .history)
         try c.encode(updatedAt, forKey: .updatedAt)
         try c.encodeIfPresent(deletedAt, forKey: .deletedAt)
+        try c.encode(layout, forKey: .layout)
     }
 
     var hasPlayback: Bool {
-        !history.isEmpty
+        // A bare blockCreated (e.g. a fresh lined note's empty body) isn't worth
+        // replaying — require some actual typed or drawn content.
+        history.contains { event in
+            switch event {
+            case .blockTextRun, .strokeAdded: return true
+            default: return false
+            }
+        }
     }
 
     private var orderedLines: [String] {
@@ -163,7 +183,8 @@ final class NoteStore: ObservableObject {
                     TextBlock(x: 0, y: 0, text: "Click anywhere on this canvas to start typing."),
                     TextBlock(x: 0, y: 80, text: "⌘N for a new note  ·  ⌘0 to toggle the sidebar"),
                     TextBlock(x: 0, y: 140, text: "Empty blocks vanish when you click away.")
-                ]
+                ],
+                layout: .freeform
             )
             notes = [welcome]
             selection = welcome.id
@@ -179,8 +200,20 @@ final class NoteStore: ObservableObject {
 
 
     @discardableResult
-    func addNote() -> Note.ID {
-        let note = Note()
+    func addNote(layout: NoteLayout) -> Note.ID {
+        let note: Note
+        if layout == .lined {
+            // A lined note starts with its single body block anchored top-left.
+            let block = TextBlock(x: 0, y: 0)
+            note = Note(
+                blocks: [block],
+                history: [.blockCreated(blockID: block.id, x: 0, y: 0, at: Date())],
+                layout: .lined
+            )
+        } else {
+            // A canvas starts empty; blocks appear where you click.
+            note = Note(layout: .freeform)
+        }
         notes.insert(note, at: 0)
         selection = note.id
         persistNow()

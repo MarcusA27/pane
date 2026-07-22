@@ -63,6 +63,9 @@ final class WindowController: NSObject, ObservableObject, NSWindowDelegate {
     /// current note, floored at `floorSize`. Blocks are measured against an
     /// unbounded canvas so their width is their true maximum.
     private func contentMinSize(for note: Note) -> CGSize {
+        // Lined notes scroll, so their content never needs a taller window.
+        guard note.layout == .freeform else { return Self.floorSize }
+
         let measure = CGSize(width: 100_000, height: 100_000)
         var right: CGFloat = 0
         var bottom: CGFloat = 0

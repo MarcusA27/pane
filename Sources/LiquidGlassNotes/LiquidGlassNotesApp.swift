@@ -18,6 +18,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 struct LiquidGlassNotesApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
     @StateObject private var store = NoteStore()
+    @StateObject private var windowController = WindowController()
     private let updaterController = SPUStandardUpdaterController(
         startingUpdater: true,
         updaterDelegate: nil,
@@ -37,7 +38,14 @@ struct LiquidGlassNotesApp: App {
         WindowGroup {
             ContentView()
                 .environmentObject(store)
-                .frame(width: 820, height: 540)
+                .frame(
+                    minWidth: WindowController.floorSize.width,
+                    idealWidth: WindowController.defaultSize.width,
+                    maxWidth: .infinity,
+                    minHeight: WindowController.floorSize.height,
+                    idealHeight: WindowController.defaultSize.height,
+                    maxHeight: .infinity
+                )
                 .onChange(of: theme) { _, newTheme in
                     PaneTheme.apply(newTheme)
                 }
@@ -50,10 +58,10 @@ struct LiquidGlassNotesApp: App {
                     }
                     .ignoresSafeArea()
                 )
-                .background(WindowConfigurator())
+                .background(WindowConfigurator(controller: windowController, store: store))
         }
         .windowStyle(.hiddenTitleBar)
-        .windowResizability(.contentSize)
+        .windowResizability(.contentMinSize)
         .commands {
             CommandGroup(replacing: .newItem) {
                 Button("New Note") { store.addNote() }
@@ -106,18 +114,22 @@ struct CheckForUpdatesView: View {
 }
 
 struct WindowConfigurator: NSViewRepresentable {
+    let controller: WindowController
+    let store: NoteStore
+
     func makeNSView(context: Context) -> NSView {
         let view = NSView()
-        DispatchQueue.main.async {
+        DispatchQueue.main.async { [controller, store] in
             guard let window = view.window else { return }
             window.isOpaque = false
             window.backgroundColor = .clear
             window.titlebarAppearsTransparent = true
             window.titleVisibility = .hidden
             window.styleMask.insert(.fullSizeContentView)
+            window.styleMask.insert(.resizable)
             window.isMovableByWindowBackground = false
             window.hasShadow = true
-            window.styleMask.remove(.resizable)
+            controller.attach(window: window, store: store)
         }
         return view
     }

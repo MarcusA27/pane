@@ -231,12 +231,15 @@ final class NoteStore: ObservableObject {
         load()
         purgeExpiredDeletes()
         if notes.isEmpty {
+            // Hand-arranged layout, shown with the sidebar closed on first
+            // launch so it reads centered in the canvas.
             let welcome = Note(
                 title: "Welcome",
                 blocks: [
-                    TextBlock(x: 0, y: 0, text: "Click anywhere on this canvas to start typing."),
-                    TextBlock(x: 0, y: 80, text: "⌘N for a new note  ·  ⌘0 to toggle the sidebar"),
-                    TextBlock(x: 0, y: 140, text: "Empty blocks vanish when you click away.")
+                    TextBlock(x: 241, y: 135, text: "Click anywhere on this canvas to start typing."),
+                    TextBlock(x: 276, y: 205, text: "Drag from empty space to draw"),
+                    TextBlock(x: 237, y: 272, text: "⌘N for a new note  ·  ⌘0 to toggle the sidebar"),
+                    TextBlock(x: 246, y: 346, text: "Empty blocks vanish when you click away.")
                 ],
                 layout: .freeform
             )

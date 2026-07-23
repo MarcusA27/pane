@@ -8,10 +8,11 @@ import Combine
 /// block. Size is global, not per-note — switching notes never resizes.
 @MainActor
 final class WindowController: NSObject, ObservableObject, NSWindowDelegate {
-    static let defaultSize = CGSize(width: 820, height: 560)
     // Floored wide/tall enough that the settings bar always fits beside the
-    // sidebar without the toolbar clipping.
+    // sidebar without the toolbar clipping. The app opens at this minimum on
+    // first launch; any later resize is remembered.
     static let floorSize = CGSize(width: 810, height: 550)
+    static let defaultSize = floorSize
 
     private static let widthKey = "paneWindowWidth"
     private static let heightKey = "paneWindowHeight"

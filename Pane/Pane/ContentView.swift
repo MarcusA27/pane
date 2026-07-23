@@ -14,7 +14,9 @@ private let readingWidth: CGFloat = 680
 
 struct ContentView: View {
     @EnvironmentObject var store: NoteStore
-    @State private var sidebarVisible = true
+    // Closed on the very first launch (welcome screen) so the welcome canvas
+    // reads clean; open on subsequent launches.
+    @State private var sidebarVisible = UserDefaults.standard.bool(forKey: "hasSeenWelcome")
     @State private var searchVisible = false
     @State private var searchQuery = ""
     @State private var searchFocusTick = 0

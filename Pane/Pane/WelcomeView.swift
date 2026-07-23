@@ -21,14 +21,6 @@ struct WelcomeView: View {
                     .foregroundStyle(Ink.text.opacity(0.65))
                     .opacity(appeared ? 1 : 0)
 
-                VStack(alignment: .center, spacing: 10) {
-                    hint(icon: "hand.tap", text: "Tap empty space to write")
-                    hint(icon: "scribble.variable", text: "Drag from empty space to draw")
-                    hint(icon: "circle.hexagongrid", text: "Open the overview to see all your notes")
-                }
-                .padding(.top, 18)
-                .opacity(appeared ? 1 : 0)
-
                 Button(action: onContinue) {
                     Text("Begin")
                         .font(.system(size: 14, weight: .regular, design: .serif).italic())
@@ -43,7 +35,7 @@ struct WelcomeView: View {
                 }
                 .buttonStyle(.plain)
                 .keyboardShortcut(.defaultAction)
-                .padding(.top, 22)
+                .padding(.top, 48)
                 .opacity(appeared ? 1 : 0)
             }
             .frame(maxWidth: 460)
@@ -58,19 +50,6 @@ struct WelcomeView: View {
             withAnimation(.easeOut(duration: 0.6).delay(0.05)) {
                 appeared = true
             }
-        }
-    }
-
-    @ViewBuilder
-    private func hint(icon: String, text: String) -> some View {
-        HStack(spacing: 12) {
-            Image(systemName: icon)
-                .font(.system(size: 13, weight: .regular))
-                .foregroundStyle(Ink.text.opacity(0.55))
-                .frame(width: 18)
-            Text(text)
-                .font(.system(size: 13.5, weight: .regular, design: .serif).italic())
-                .foregroundStyle(Ink.text.opacity(0.75))
         }
     }
 }

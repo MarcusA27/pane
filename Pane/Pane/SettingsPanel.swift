@@ -62,6 +62,7 @@ struct SettingsPanel: View {
     @AppStorage(PaneFonts.noteKey) private var noteFont = PaneFonts.systemValue
     @AppStorage(PaneFonts.sidebarKey) private var sidebarFont = PaneFonts.systemValue
     @AppStorage(GlassDefaults.liquidGlassKey) private var liquidGlass = GlassDefaults.liquidGlass
+    @State private var resetSpin: Double = 0
 
     /// Smallest the toolbar can get before its top row starts to clip.
     static let contentMinWidth: CGFloat = 520
@@ -78,7 +79,6 @@ struct SettingsPanel: View {
             && sidebarFrost == GlassDefaults.frost
             && sidebarSmoke == GlassDefaults.smoke
             && sheen == GlassDefaults.sheen
-            && theme == PaneTheme.systemValue
             && noteFont == PaneFonts.systemValue
             && sidebarFont == PaneFonts.systemValue
             && liquidGlass == GlassDefaults.liquidGlass
@@ -115,21 +115,11 @@ struct SettingsPanel: View {
 
     private var controls: some View {
         VStack(alignment: .leading, spacing: 16) {
-            // Theme left, liquid-glass toggle centered, reset/done right.
-            // Each group is fixedSize so it keeps its natural width and the
-            // gaps between them absorb the slack instead of the controls
-            // collapsing (which mangled the label and buttons when narrow).
-            HStack(alignment: .center, spacing: 12) {
-                themePicker.fixedSize()
-                Spacer(minLength: 12)
-                glassControl.fixedSize()
-                Spacer(minLength: 12)
-                HStack(spacing: 10) {
-                    resetButton
-                    doneButton
-                }
+            // Theme segments and the liquid-glass toggle share one pill,
+            // centered.
+            themePicker
                 .fixedSize()
-            }
+                .frame(maxWidth: .infinity)
 
             // Slider matrix, with each column's font picker in its header.
             glassMatrix
@@ -140,6 +130,15 @@ struct SettingsPanel: View {
     }
 
     private var glassMatrix: some View {
+        ZStack(alignment: .topLeading) {
+            glassWell
+            resetButton
+                .padding(.leading, 30)
+                .padding(.top, 12)
+        }
+    }
+
+    private var glassWell: some View {
         Grid(alignment: .leading, horizontalSpacing: 16, verticalSpacing: 13) {
                 GridRow {
                     Color.clear
@@ -190,19 +189,6 @@ struct SettingsPanel: View {
             .disabled(!liquidGlass)
     }
 
-    private var glassControl: some View {
-        HStack(spacing: 8) {
-            Text("liquid glass")
-                .font(.custom("Helvetica Neue", size: 12.5))
-                .textCase(.lowercase)
-                .lineLimit(1)
-                .fixedSize()
-                .foregroundStyle(Ink.text.opacity(0.8))
-                .shadow(color: .black.opacity(0.22), radius: 1.2, x: 0, y: 1)
-            GlassToggle(isOn: $liquidGlass)
-        }
-    }
-
     // Docked to the bottom-right of the window: the left edge is flush against
     // the sidebar divider (square top-left) and the bottom/right sit on the
     // window edges, so only the top-right corner is eased. No lifting shadow —
@@ -246,7 +232,7 @@ struct SettingsPanel: View {
     }
 
     private var resetButton: some View {
-        Button("reset") {
+        Button {
             withAnimation(.easeOut(duration: 0.2)) {
                 blur = GlassDefaults.blur
                 frost = GlassDefaults.frost
@@ -255,44 +241,22 @@ struct SettingsPanel: View {
                 sidebarFrost = GlassDefaults.frost
                 sidebarSmoke = GlassDefaults.smoke
                 sheen = GlassDefaults.sheen
-                theme = PaneTheme.systemValue
                 noteFont = PaneFonts.systemValue
                 sidebarFont = PaneFonts.systemValue
                 liquidGlass = GlassDefaults.liquidGlass
             }
+            withAnimation(.easeInOut(duration: 0.5)) { resetSpin -= 360 }
+        } label: {
+            Image(systemName: "arrow.counterclockwise")
+                .font(.system(size: 14, weight: .medium))
+                .foregroundStyle(Ink.text.opacity(isDefault ? 0.25 : 0.7))
+                .rotationEffect(.degrees(resetSpin))
+                .frame(width: 22, height: 22)
+                .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .font(.custom("Helvetica Neue", size: 12.5))
-        .foregroundStyle(Ink.text.opacity(isDefault ? 0.3 : 0.8))
-        .padding(.horizontal, 16)
-        .padding(.vertical, 7)
-        .background(
-            Capsule().strokeBorder(Ink.text.opacity(isDefault ? 0.10 : 0.22), lineWidth: 0.5)
-        )
         .disabled(isDefault)
-    }
-
-    private var doneButton: some View {
-        Button("done") { onClose() }
-            .buttonStyle(.plain)
-            .font(.custom("Helvetica Neue", size: 12.5))
-            .foregroundStyle(Ink.text)
-            .padding(.horizontal, 18)
-            .padding(.vertical, 7)
-            .background(
-                Capsule().fill(.white.opacity(0.30))
-                    .overlay(
-                        Capsule().strokeBorder(
-                            LinearGradient(
-                                colors: [.white.opacity(0.65), .white.opacity(0.15)],
-                                startPoint: .topLeading, endPoint: .bottomTrailing
-                            ),
-                            lineWidth: 0.8
-                        )
-                    )
-                    .shadow(color: .black.opacity(0.12), radius: 5, x: 0, y: 2)
-            )
-            .keyboardShortcut(.defaultAction)
+        .help("Reset appearance")
     }
 
     // Compact font pill: the family name rendered in its own typeface with a
@@ -351,6 +315,12 @@ struct SettingsPanel: View {
             themeChoice("circle.lefthalf.filled", value: PaneTheme.systemValue, help: "Match the system")
             themeChoice("sun.max", value: "light", help: "Light")
             themeChoice("moon", value: "dark", help: "Dark")
+            Rectangle()
+                .fill(.white.opacity(0.18))
+                .frame(width: 1, height: 18)
+                .padding(.horizontal, 5)
+            GlassToggle(isOn: $liquidGlass)
+                .padding(.trailing, 5)
         }
         .padding(3)
         .background(alignment: .leading) {
@@ -425,9 +395,16 @@ struct GlassToggle: View {
 
     var body: some View {
         ZStack(alignment: isOn ? .trailing : .leading) {
+            // Same fill as the glass-properties well, and dimmed on the same
+            // schedule (glass off → 0.35), so the toggle background always
+            // matches the card behind it.
             Capsule()
-                .fill(isOn ? Color(white: 0.5) : .white.opacity(0.14))
-                .overlay(Capsule().strokeBorder(.white.opacity(0.24), lineWidth: 0.5))
+                .fill(
+                    Color.black.opacity(0.10)
+                        .shadow(.inner(color: .black.opacity(0.22), radius: 2, x: 0, y: 1))
+                )
+                .overlay(Capsule().strokeBorder(.white.opacity(0.10), lineWidth: 0.5))
+                .opacity(isOn ? 1 : 0.35)
             Circle()
                 .fill(.white)
                 .shadow(color: .black.opacity(0.25), radius: 1.5, x: 0, y: 1)

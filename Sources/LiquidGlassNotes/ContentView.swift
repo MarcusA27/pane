@@ -1442,7 +1442,16 @@ final class EraseNSView: NSView {
 
     override var isFlipped: Bool { true }
 
+    // A right-drag erases; a plain right-click is left for the text view's
+    // native context menu (spelling suggestions, edit commands). We only claim
+    // the event stream once, then branch on whether it became a drag.
+    private var downLocation: NSPoint = .zero
+    private var didDrag = false
+    private var bypassHitTest = false
+    private static let dragThreshold: CGFloat = 3
+
     override func hitTest(_ point: NSPoint) -> NSView? {
+        if bypassHitTest { return nil }
         switch NSApp.currentEvent?.type {
         case .rightMouseDown, .rightMouseDragged, .rightMouseUp:
             return self
@@ -1452,10 +1461,37 @@ final class EraseNSView: NSView {
     }
 
     override func rightMouseDown(with event: NSEvent) {
-        onErase?(convert(event.locationInWindow, from: nil))
+        downLocation = event.locationInWindow
+        didDrag = false
     }
 
     override func rightMouseDragged(with event: NSEvent) {
-        onErase?(convert(event.locationInWindow, from: nil))
+        if !didDrag {
+            let moved = hypot(event.locationInWindow.x - downLocation.x,
+                              event.locationInWindow.y - downLocation.y)
+            if moved > Self.dragThreshold { didDrag = true }
+        }
+        if didDrag {
+            onErase?(convert(event.locationInWindow, from: nil))
+        }
+    }
+
+    override func rightMouseUp(with event: NSEvent) {
+        if didDrag {
+            onErase?(convert(event.locationInWindow, from: nil))
+            return
+        }
+        // No drag: hand the click to whatever text view sits under it so its
+        // native menu appears; otherwise treat it as a tap-erase.
+        bypassHitTest = true
+        let target = window?.contentView?.hitTest(event.locationInWindow)
+        bypassHitTest = false
+        if let textView = target as? NSTextView, let menu = textView.menu(for: event) {
+            menu.popUp(positioning: nil,
+                       at: textView.convert(event.locationInWindow, from: nil),
+                       in: textView)
+        } else {
+            onErase?(convert(event.locationInWindow, from: nil))
+        }
     }
 }

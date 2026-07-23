@@ -45,6 +45,8 @@ struct LinedTextView: NSViewRepresentable {
         textView.textColor = Ink.nsText
         textView.insertionPointColor = Ink.nsText
         textView.selectedTextAttributes = [.backgroundColor: Ink.nsSelection]
+        textView.isContinuousSpellCheckingEnabled = true
+        textView.isGrammarCheckingEnabled = true
         textView.allowsUndo = true
         textView.isVerticallyResizable = true
         textView.isHorizontallyResizable = false

@@ -19,6 +19,8 @@ struct CanvasTextEditor: NSViewRepresentable {
         textView.textColor = Ink.nsText
         textView.insertionPointColor = Ink.nsText
         textView.selectedTextAttributes = [.backgroundColor: Ink.nsSelection]
+        textView.isContinuousSpellCheckingEnabled = true
+        textView.isGrammarCheckingEnabled = true
         textView.allowsUndo = true
         textView.textContainerInset = NSSize(width: 0, height: 4)
         textView.isHorizontallyResizable = false

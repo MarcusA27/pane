@@ -1,8 +1,8 @@
 .build/
 .swiftpm/
-*.xcodeproj/
 DerivedData/
-Package.resolved
+xcuserdata/
+*.xcuserstate
 .DS_Store
 dist/
 .sparkle-tools/

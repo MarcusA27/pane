@@ -1,5 +1,6 @@
 import SwiftUI
 import AppKit
+import Combine
 
 /// Makes the window resizable with a single size that persists across
 /// launches. The window can never shrink below the current note's content

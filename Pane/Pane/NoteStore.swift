@@ -1,5 +1,6 @@
 import Foundation
 import SwiftUI
+import Combine
 
 /// A span of a block's text carrying bold and/or italic. Offsets are UTF-16
 /// (NSString) positions, matching how the text view reports ranges.

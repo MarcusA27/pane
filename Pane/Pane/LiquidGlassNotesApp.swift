@@ -1,6 +1,5 @@
 import SwiftUI
 import AppKit
-import Sparkle
 
 final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
@@ -19,11 +18,6 @@ struct LiquidGlassNotesApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
     @StateObject private var store = NoteStore()
     @StateObject private var windowController = WindowController()
-    private let updaterController = SPUStandardUpdaterController(
-        startingUpdater: true,
-        updaterDelegate: nil,
-        userDriverDelegate: nil
-    )
 
     @AppStorage(GlassDefaults.blurKey) private var glassBlur = GlassDefaults.blur
     @AppStorage(GlassDefaults.frostKey) private var glassFrost = GlassDefaults.frost
@@ -92,33 +86,7 @@ struct LiquidGlassNotesApp: App {
                     theme = PaneTheme.systemValue
                 }
             }
-            CommandGroup(after: .appInfo) {
-                CheckForUpdatesView(updater: updaterController.updater)
-            }
         }
-    }
-}
-
-private final class CheckForUpdatesViewModel: ObservableObject {
-    @Published var canCheckForUpdates = false
-    init(updater: SPUUpdater) {
-        updater.publisher(for: \.canCheckForUpdates)
-            .assign(to: &$canCheckForUpdates)
-    }
-}
-
-struct CheckForUpdatesView: View {
-    @ObservedObject private var viewModel: CheckForUpdatesViewModel
-    private let updater: SPUUpdater
-
-    init(updater: SPUUpdater) {
-        self.updater = updater
-        self.viewModel = CheckForUpdatesViewModel(updater: updater)
-    }
-
-    var body: some View {
-        Button("Check for Updates…", action: updater.checkForUpdates)
-            .disabled(!viewModel.canCheckForUpdates)
     }
 }
 

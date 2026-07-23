@@ -1,6 +1,7 @@
 import SwiftUI
 import AppKit
 import QuartzCore
+import Combine
 
 struct DisplayBlock: Identifiable {
     let id: UUID

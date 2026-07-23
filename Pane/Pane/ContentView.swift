@@ -335,9 +335,11 @@ struct NoteRow: View {
     let note: Note
     let isSelected: Bool
     @AppStorage(PaneFonts.sidebarKey) private var sidebarFontFamily = PaneFonts.systemValue
+    @ObservedObject private var fontPreview = FontPreview.shared
 
     private func rowFont(_ size: CGFloat, _ weight: Font.Weight) -> Font {
-        PaneFonts.swiftUI(family: sidebarFontFamily, size: size, weight: weight, systemDesign: .default)
+        PaneFonts.swiftUI(family: fontPreview.sidebar ?? sidebarFontFamily,
+                          size: size, weight: weight, systemDesign: .default)
     }
 
     private var relativeUpdated: String {
@@ -435,6 +437,7 @@ struct NotePlaceholder: View {
     let sidebarVisible: Bool
     let bottomInset: CGFloat
     @AppStorage(PaneFonts.noteKey) private var noteFontChoice = PaneFonts.systemValue
+    @ObservedObject private var fontPreview = FontPreview.shared
 
     private static let fontSize: CGFloat = 15
     private static let lineSpacing: CGFloat = 7
@@ -450,7 +453,7 @@ struct NotePlaceholder: View {
             let lines = lineCount(for: geo.size.height)
             if lines > 0 {
                 Text(Self.lorem)
-                    .font(PaneFonts.swiftUI(family: noteFontChoice,
+                    .font(PaneFonts.swiftUI(family: fontPreview.note ?? noteFontChoice,
                                             size: Self.fontSize,
                                             weight: .regular,
                                             systemDesign: .serif))

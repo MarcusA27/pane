@@ -143,28 +143,28 @@ struct SettingsPanel: View {
                 GridRow {
                     Color.clear
                         .frame(width: Self.labelColumnWidth, height: 1)
-                    columnHeader("Canvas", font: $noteFont)
-                    columnHeader("Sidebar", font: $sidebarFont)
+                    columnHeader("Canvas", font: $noteFont) { FontPreview.shared.note = $0 }
+                    columnHeader("Sidebar", font: $sidebarFont) { FontPreview.shared.sidebar = $0 }
                 }
                 GridRow {
-                    rowLabel("Blur")
-                    GlassSlider(value: $blur)
-                    GlassSlider(value: $sidebarBlur)
+                    dimForGlass(rowLabel("Blur"))
+                    dimForGlass(GlassSlider(value: $blur))
+                    dimForGlass(GlassSlider(value: $sidebarBlur))
                 }
                 GridRow {
-                    rowLabel("Frost")
-                    GlassSlider(value: $frost)
-                    GlassSlider(value: $sidebarFrost)
+                    dimForGlass(rowLabel("Frost"))
+                    dimForGlass(GlassSlider(value: $frost))
+                    dimForGlass(GlassSlider(value: $sidebarFrost))
                 }
                 GridRow {
-                    rowLabel("Smoke")
-                    GlassSlider(value: $smoke)
-                    GlassSlider(value: $sidebarSmoke)
+                    dimForGlass(rowLabel("Smoke"))
+                    dimForGlass(GlassSlider(value: $smoke))
+                    dimForGlass(GlassSlider(value: $sidebarSmoke))
                 }
                 GridRow {
-                    rowLabel("Sheen")
+                    dimForGlass(rowLabel("Sheen"))
                         .padding(.top, 9)
-                    GlassSlider(value: $sheen)
+                    dimForGlass(GlassSlider(value: $sheen))
                         .gridCellColumns(2)
                         .padding(.top, 9)
                 }
@@ -184,7 +184,15 @@ struct SettingsPanel: View {
                         RoundedRectangle(cornerRadius: 14, style: .continuous)
                             .strokeBorder(.white.opacity(0.10), lineWidth: 0.5)
                     )
+                    // Only the card dims when glass is off; the font pickers in
+                    // the header stay live (see dimForGlass on the sliders).
+                    .opacity(liquidGlass ? 1 : 0.35)
             )
+    }
+
+    @ViewBuilder
+    private func dimForGlass<V: View>(_ content: V) -> some View {
+        content
             .opacity(liquidGlass ? 1 : 0.35)
             .disabled(!liquidGlass)
     }
@@ -259,48 +267,6 @@ struct SettingsPanel: View {
         .help("Reset appearance")
     }
 
-    // Compact font pill: the family name rendered in its own typeface with a
-    // trailing chevron, filling the column beside its header.
-    @ViewBuilder
-    private func fontField(selection: Binding<String>) -> some View {
-        let current = selection.wrappedValue
-        Menu {
-            Button {
-                selection.wrappedValue = PaneFonts.systemValue
-            } label: {
-                if current.isEmpty { Label("System", systemImage: "checkmark") } else { Text("System") }
-            }
-            Divider()
-            ForEach(PaneFonts.families, id: \.self) { family in
-                Button {
-                    selection.wrappedValue = family
-                } label: {
-                    if current == family { Label(family, systemImage: "checkmark") } else { Text(family) }
-                }
-            }
-        } label: {
-            HStack(spacing: 6) {
-                Text(current.isEmpty ? "System" : current)
-                    .font(current.isEmpty
-                          ? .system(size: 12.5)
-                          : .custom(current, size: 12.5))
-                    .foregroundStyle(Ink.text)
-                    .lineLimit(1)
-                    .truncationMode(.tail)
-                Image(systemName: "chevron.down")
-                    .font(.system(size: 9, weight: .semibold))
-                    .foregroundStyle(Ink.text.opacity(0.45))
-            }
-            .padding(.horizontal, 11)
-            .padding(.vertical, 6)
-            .background(
-                Capsule().fill(.white.opacity(0.14))
-                    .overlay(Capsule().strokeBorder(.white.opacity(0.22), lineWidth: 0.5))
-            )
-        }
-        .menuStyle(.borderlessButton)
-        .menuIndicator(.hidden)
-    }
 
     private var themeIndex: Int {
         switch theme {
@@ -365,7 +331,8 @@ struct SettingsPanel: View {
     }
 
     @ViewBuilder
-    private func columnHeader(_ text: String, font: Binding<String>) -> some View {
+    private func columnHeader(_ text: String, font: Binding<String>,
+                              onPreview: @escaping (String?) -> Void) -> some View {
         HStack(spacing: 10) {
             Text(text)
                 .font(.custom("Helvetica Neue", size: 13))
@@ -373,7 +340,7 @@ struct SettingsPanel: View {
                 .foregroundStyle(Ink.text.opacity(0.8))
                 .shadow(color: .black.opacity(0.22), radius: 1.2, x: 0, y: 1)
                 .fixedSize()
-            fontField(selection: font)
+            FontPicker(selection: font, onPreview: onPreview)
         }
         .frame(maxWidth: .infinity)
     }
@@ -390,6 +357,106 @@ struct SettingsPanel: View {
 }
 
 /// Small capsule switch matching the panel's glass language.
+/// Font picker with live hover preview: opening it shows a scrollable list of
+/// families rendered in their own typeface; hovering a row previews it (via
+/// `onPreview`) on the note placeholder or sidebar without committing, and a
+/// tap commits the choice.
+struct FontPicker: View {
+    @Binding var selection: String
+    var onPreview: (String?) -> Void
+
+    @State private var isOpen = false
+    @State private var hovered: String? = nil
+
+    var body: some View {
+        Button {
+            isOpen.toggle()
+        } label: {
+            HStack(spacing: 6) {
+                Text(selection.isEmpty ? "System" : selection)
+                    .font(selection.isEmpty ? .system(size: 12.5) : .custom(selection, size: 12.5))
+                    .foregroundStyle(Ink.text)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+                    // Fixed box so a font's own metrics can't resize the pill
+                    // (and shift the whole panel) when it's selected.
+                    .frame(width: 64, height: 17, alignment: .leading)
+                Image(systemName: "chevron.down")
+                    .font(.system(size: 9, weight: .semibold))
+                    .foregroundStyle(Ink.text.opacity(0.45))
+            }
+            .padding(.horizontal, 11)
+            .padding(.vertical, 6)
+            .background(
+                Capsule().fill(.white.opacity(0.14))
+                    .overlay(Capsule().strokeBorder(.white.opacity(0.22), lineWidth: 0.5))
+            )
+            .contentShape(Capsule())
+        }
+        .buttonStyle(.plain)
+        // Opens to the side so it doesn't cover the note text being previewed.
+        .popover(isPresented: $isOpen, arrowEdge: .leading) {
+            list
+        }
+        .onChange(of: isOpen) { _, open in
+            if !open { onPreview(nil) }
+        }
+    }
+
+    private var list: some View {
+        ScrollView {
+            LazyVStack(alignment: .leading, spacing: 1) {
+                row(name: "System", value: PaneFonts.systemValue)
+                Divider().padding(.vertical, 4)
+                ForEach(PaneFonts.families, id: \.self) { family in
+                    row(name: family, value: family)
+                }
+            }
+            .padding(6)
+        }
+        .frame(width: 230, height: 320)
+    }
+
+    @ViewBuilder
+    private func row(name: String, value: String) -> some View {
+        let selected = selection == value
+        HStack(spacing: 8) {
+            Text(name)
+                .font(value.isEmpty ? .system(size: 13) : .custom(value, size: 13))
+                .lineLimit(1)
+                .truncationMode(.tail)
+            Spacer(minLength: 0)
+            if selected {
+                Image(systemName: "checkmark")
+                    .font(.system(size: 10, weight: .semibold))
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .padding(.horizontal, 8)
+        .padding(.vertical, 5)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            RoundedRectangle(cornerRadius: 5, style: .continuous)
+                .fill(hovered == value ? Color.primary.opacity(0.1) : .clear)
+        )
+        .contentShape(Rectangle())
+        .onHover { hovering in
+            if hovering {
+                hovered = value
+                onPreview(value)
+            } else {
+                if hovered == value { hovered = nil }
+                onPreview(nil)
+            }
+        }
+        .onTapGesture {
+            selection = value
+            onPreview(nil)
+            isOpen = false
+        }
+    }
+}
+
 struct GlassToggle: View {
     @Binding var isOn: Bool
 

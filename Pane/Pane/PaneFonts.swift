@@ -1,5 +1,16 @@
 import SwiftUI
 import AppKit
+import Combine
+
+/// Live font preview while a font picker is open: when a family is non-nil the
+/// note placeholder / sidebar rows render in it without committing the choice.
+/// Cleared when the hover ends or the picker closes.
+@MainActor
+final class FontPreview: ObservableObject {
+    static let shared = FontPreview()
+    @Published var note: String? = nil
+    @Published var sidebar: String? = nil
+}
 
 /// Note and sidebar fonts are stored as a font-family name. An empty string
 /// means the app default: the serif design for note text, the system sans for

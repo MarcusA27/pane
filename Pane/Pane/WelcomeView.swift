@@ -21,7 +21,7 @@ struct WelcomeView: View {
                     .foregroundStyle(Ink.text.opacity(0.65))
                     .opacity(appeared ? 1 : 0)
 
-                VStack(alignment: .leading, spacing: 10) {
+                VStack(alignment: .center, spacing: 10) {
                     hint(icon: "hand.tap", text: "Tap empty space to write")
                     hint(icon: "scribble.variable", text: "Drag from empty space to draw")
                     hint(icon: "circle.hexagongrid", text: "Open the overview to see all your notes")

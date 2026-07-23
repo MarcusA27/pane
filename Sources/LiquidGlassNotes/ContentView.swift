@@ -7,6 +7,9 @@ enum Tool: Equatable {
 }
 
 private let sidebarWidth: CGFloat = 282
+/// Comfortable measure for lined note text; on wide windows the column caps
+/// here and centers in the note area instead of stretching edge to edge.
+private let readingWidth: CGFloat = 680
 
 struct ContentView: View {
     @EnvironmentObject var store: NoteStore
@@ -15,22 +18,24 @@ struct ContentView: View {
     @State private var searchQuery = ""
     @State private var searchFocusTick = 0
     @State private var settingsVisible = false
+    @State private var settingsBarHeight: CGFloat = 0
     @State private var newNoteChooserVisible = false
     @AppStorage("hasSeenWelcome") private var hasSeenWelcome = false
     @AppStorage(GlassDefaults.sheenKey) private var glassSheen = GlassDefaults.sheen
     @AppStorage(GlassDefaults.sidebarBlurKey) private var sidebarBlur = GlassDefaults.blur
     @AppStorage(GlassDefaults.sidebarFrostKey) private var sidebarFrost = GlassDefaults.frost
     @AppStorage(GlassDefaults.sidebarSmokeKey) private var sidebarSmoke = GlassDefaults.smoke
+    @AppStorage(GlassDefaults.liquidGlassKey) private var liquidGlass = GlassDefaults.liquidGlass
 
     var body: some View {
         ZStack {
             appShell
 
             if settingsVisible {
-                SettingsPanel {
+                SettingsPanel(leadingInset: sidebarVisible ? sidebarWidth : 0) {
                     withAnimation(.easeOut(duration: 0.18)) { settingsVisible = false }
                 }
-                .transition(.opacity)
+                .transition(.move(edge: .bottom))
                 .zIndex(3)
             }
 
@@ -58,9 +63,15 @@ struct ContentView: View {
             }
         }
         .animation(.easeOut(duration: 0.45), value: hasSeenWelcome)
+        .onPreferenceChange(SettingsBarHeightKey.self) { height in
+            settingsBarHeight = height
+        }
         .onReceive(NotificationCenter.default.publisher(for: .togglePaneSettings)) { _ in
             if !settingsVisible {
                 dismissSearch()
+                if !sidebarVisible {
+                    withAnimation(.easeInOut(duration: 0.28)) { sidebarVisible = true }
+                }
             }
             withAnimation(.easeOut(duration: 0.18)) { settingsVisible.toggle() }
         }
@@ -100,7 +111,7 @@ struct ContentView: View {
             )
         .overlay(alignment: .top) {
             LinearGradient(
-                colors: [.white.opacity(glassSheen * GlassDefaults.maxSheenOpacity), .clear],
+                colors: [.white.opacity(liquidGlass ? glassSheen * GlassDefaults.maxSheenOpacity : 0), .clear],
                 startPoint: .top, endPoint: .bottom
             )
             .frame(height: 60)
@@ -110,8 +121,15 @@ struct ContentView: View {
 
     private var workspace: some View {
         ZStack(alignment: .topLeading) {
-            Detail()
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            Group {
+                if settingsVisible {
+                    NotePlaceholder(sidebarVisible: sidebarVisible,
+                                    bottomInset: settingsBarHeight)
+                } else {
+                    Detail(sidebarVisible: sidebarVisible)
+                }
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
 
             if sidebarVisible {
                 HStack(spacing: 0) {
@@ -123,11 +141,17 @@ struct ContentView: View {
                     )
                     .frame(width: sidebarWidth)
                     .background(
-                        ZStack {
-                            VisualEffectView(material: .menu, blendingMode: .behindWindow)
-                                .opacity(sidebarBlur)
-                            Color.white.opacity(sidebarFrost * GlassDefaults.maxFrostOpacity)
-                            Color.black.opacity(sidebarSmoke * GlassDefaults.maxSmokeOpacity)
+                        Group {
+                            if liquidGlass {
+                                ZStack {
+                                    VisualEffectView(material: .menu, blendingMode: .behindWindow)
+                                        .opacity(sidebarBlur)
+                                    Color.white.opacity(sidebarFrost * GlassDefaults.maxFrostOpacity)
+                                    Color.black.opacity(sidebarSmoke * GlassDefaults.maxSmokeOpacity)
+                                }
+                            } else {
+                                OpaqueBackground.sidebar
+                            }
                         }
                         .ignoresSafeArea()
                     )
@@ -162,6 +186,13 @@ struct DividerLine: View {
     }
 }
 
+private struct ScrollTopKey: PreferenceKey {
+    static let defaultValue: CGFloat = 0
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+        value = nextValue()
+    }
+}
+
 struct Sidebar: View {
     @EnvironmentObject var store: NoteStore
     @Environment(\.undoManager) private var undoManager
@@ -171,6 +202,7 @@ struct Sidebar: View {
     let onDismissSearch: () -> Void
 
     @FocusState private var searchFocused: Bool
+    @State private var topOverscroll: CGFloat = 0
 
     private static let listTopInset: CGFloat = 10
 
@@ -209,10 +241,37 @@ struct Sidebar: View {
                     }
                 }
                 .padding(.horizontal, 10)
-                .padding(.bottom, 58)
+                .padding(.bottom, 62)
+                .background(
+                    GeometryReader { proxy in
+                        Color.clear.preference(
+                            key: ScrollTopKey.self,
+                            value: proxy.frame(in: .named("sidebarScroll")).minY
+                        )
+                    }
+                )
             }
+            .coordinateSpace(name: "sidebarScroll")
             .scrollIndicators(.never)
             .scrollContentBackground(.hidden)
+            .onPreferenceChange(ScrollTopKey.self) { minY in
+                topOverscroll = max(0, -minY)
+            }
+            // Fade the list at both ends; the bottom keeps a fully-clear band
+            // sized to the toggle button so it never has note text behind it,
+            // with a short fade above. The top fade grows in from zero only
+            // once you scroll, so the first row isn't dimmed at rest.
+            .mask(
+                VStack(spacing: 0) {
+                    LinearGradient(colors: [.clear, .black], startPoint: .top, endPoint: .bottom)
+                        .frame(height: min(20, topOverscroll))
+                    Color.black
+                    LinearGradient(colors: [.black, .clear], startPoint: .top, endPoint: .bottom)
+                        .frame(height: 16)
+                    Color.clear
+                        .frame(height: 44)
+                }
+            )
         }
         .padding(.top, Self.listTopInset)
         .onChange(of: searchFocusTick) { _, _ in
@@ -228,6 +287,7 @@ struct Sidebar: View {
             TextField("Search", text: $searchQuery)
                 .textFieldStyle(.plain)
                 .font(.system(size: 12.5))
+                .tint(Ink.text)
                 .focused($searchFocused)
                 .onSubmit {
                     if let first = filteredNotes.first {
@@ -250,10 +310,10 @@ struct Sidebar: View {
         .padding(.vertical, 6)
         .background(
             RoundedRectangle(cornerRadius: 9, style: .continuous)
-                .fill(.white.opacity(0.14))
+                .fill(.white.opacity(0.24))
                 .overlay(
                     RoundedRectangle(cornerRadius: 9, style: .continuous)
-                        .strokeBorder(.white.opacity(0.25), lineWidth: 0.5)
+                        .strokeBorder(.white.opacity(0.34), lineWidth: 0.5)
                 )
         )
         .background(
@@ -271,23 +331,33 @@ struct Sidebar: View {
 struct NoteRow: View {
     let note: Note
     let isSelected: Bool
+    @AppStorage(PaneFonts.sidebarKey) private var sidebarFontFamily = PaneFonts.systemValue
+
+    private func rowFont(_ size: CGFloat, _ weight: Font.Weight) -> Font {
+        PaneFonts.swiftUI(family: sidebarFontFamily, size: size, weight: weight, systemDesign: .default)
+    }
+
+    private var relativeUpdated: String {
+        if Date().timeIntervalSince(note.updatedAt) < 60 { return "now" }
+        return note.updatedAt.formatted(.relative(presentation: .named, unitsStyle: .abbreviated))
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 5) {
             Text(note.displayTitle)
-                .font(.system(size: 13.5, weight: .semibold))
+                .font(rowFont(13.5, .semibold))
                 .foregroundStyle(.primary)
                 .lineLimit(1)
             HStack(spacing: 6) {
-                Text(note.updatedAt, format: .relative(presentation: .named, unitsStyle: .abbreviated))
-                    .font(.system(size: 11, weight: .medium))
+                Text(relativeUpdated)
+                    .font(rowFont(11, .medium))
                     .foregroundStyle(.secondary)
                 if !note.snippet.isEmpty {
                     Text("·")
-                        .font(.system(size: 11))
+                        .font(rowFont(11, .regular))
                         .foregroundStyle(.tertiary)
                     Text(note.snippet)
-                        .font(.system(size: 11))
+                        .font(rowFont(11, .regular))
                         .foregroundStyle(.tertiary)
                         .lineLimit(1)
                 }
@@ -339,17 +409,69 @@ struct GlassCircleButton<Label: View>: View {
 
 struct Detail: View {
     @EnvironmentObject var store: NoteStore
+    let sidebarVisible: Bool
 
     var body: some View {
         ZStack {
             Color.clear
             if let id = store.selection, let binding = store.binding(for: id) {
-                Editor(note: binding)
+                Editor(note: binding, sidebarVisible: sidebarVisible)
                     .id(id)
             } else {
                 EmptyStatePrompt()
             }
         }
+    }
+}
+
+/// While the settings bar is open the note is swapped for placeholder text, so
+/// font and glass tweaks have something representative to read against and no
+/// real content sits hidden underneath the bar. Trimmed to the last whole line
+/// that clears the bar's top edge.
+struct NotePlaceholder: View {
+    let sidebarVisible: Bool
+    let bottomInset: CGFloat
+    @AppStorage(PaneFonts.noteKey) private var noteFontChoice = PaneFonts.systemValue
+
+    private static let fontSize: CGFloat = 15
+    private static let lineSpacing: CGFloat = 7
+
+    private static let lorem = "Lorem ipsum dolor sit amet, consectetur adipiscing elit, "
+        + "sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. "
+        + "Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris "
+        + "nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in "
+        + "reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur."
+
+    var body: some View {
+        GeometryReader { geo in
+            let lines = lineCount(for: geo.size.height)
+            if lines > 0 {
+                Text(Self.lorem)
+                    .font(PaneFonts.swiftUI(family: noteFontChoice,
+                                            size: Self.fontSize,
+                                            weight: .regular,
+                                            systemDesign: .serif))
+                    .lineSpacing(Self.lineSpacing)
+                    .lineLimit(lines)
+                    .foregroundStyle(Ink.text)
+                    .frame(maxWidth: readingWidth, alignment: .topLeading)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+            }
+        }
+        // Matches the lined editor's insets, including the text container's own
+        // 6/8 padding, so the placeholder lands where real text would.
+        .padding(.leading, (sidebarVisible ? sidebarWidth + 22 : 34) + 6)
+        .padding(.trailing, 26)
+        .padding(.top, 60)
+        .padding(.bottom, bottomInset + 10)
+        .allowsHitTesting(false)
+    }
+
+    private func lineCount(for height: CGFloat) -> Int {
+        let font = PaneFonts.noteNSFont(size: Self.fontSize)
+        let lineHeight = font.ascender - font.descender + font.leading
+        guard lineHeight > 0, height > 0 else { return 0 }
+        return max(0, Int((height + Self.lineSpacing) / (lineHeight + Self.lineSpacing)))
     }
 }
 
@@ -405,6 +527,8 @@ final class CanvasUndo: ObservableObject {
 struct Editor: View {
     @EnvironmentObject var store: NoteStore
     @Binding var note: Note
+    var sidebarVisible: Bool = false
+    @AppStorage(PaneFonts.noteKey) private var noteFontChoice = PaneFonts.systemValue
     @State private var focusedBlock: UUID?
     @State private var tool: Tool = .text
     @State private var isPlaying: Bool = false
@@ -483,16 +607,33 @@ struct Editor: View {
         )
     }
 
+    private var linedStylesBinding: Binding<[StyleRun]> {
+        Binding(
+            get: { note.blocks.first?.styles ?? [] },
+            set: { newValue in
+                if note.blocks.isEmpty {
+                    note.blocks = [TextBlock(x: 0, y: 0, styles: newValue)]
+                } else {
+                    note.blocks[0].styles = newValue
+                }
+            }
+        )
+    }
+
     private var linedContent: some View {
         LinedTextView(
             text: linedTextBinding,
+            styles: linedStylesBinding,
+            fontChoice: noteFontChoice,
             onTextChanged: { newText in
                 if let id = note.blocks.first?.id {
                     scheduleTextRun(blockID: id, text: newText)
                 }
             }
         )
-        .padding(.leading, 34)
+        .frame(maxWidth: readingWidth)
+        .frame(maxWidth: .infinity)
+        .padding(.leading, sidebarVisible ? sidebarWidth + 22 : 34)
         .padding(.trailing, 20)
         .padding(.top, 52)
         .padding(.bottom, 16)
@@ -1064,15 +1205,9 @@ struct BlockView: View {
     static let preferredMaxWidth: CGFloat = 480
     static let minBlockHeight: CGFloat = 26
     static let canvasDragMargin: CGFloat = 40
-    static let blockFont: NSFont = {
-        let size: CGFloat = 15
-        let base = NSFont.systemFont(ofSize: size)
-        if let desc = base.fontDescriptor.withDesign(.serif),
-           let serif = NSFont(descriptor: desc, size: size) {
-            return serif
-        }
-        return base
-    }()
+    // Follows the user's note-font choice; read fresh so a change applies as
+    // soon as the editors re-render.
+    static var blockFont: NSFont { PaneFonts.noteNSFont(size: 15) }
     private static let lineFragmentPadding: CGFloat = 5
     private static let verticalInset: CGFloat = 4
 

@@ -17,7 +17,8 @@ struct CanvasTextEditor: NSViewRepresentable {
         textView.isRichText = false
         textView.font = BlockView.blockFont
         textView.textColor = Ink.nsText
-        textView.insertionPointColor = .controlAccentColor
+        textView.insertionPointColor = Ink.nsText
+        textView.selectedTextAttributes = [.backgroundColor: Ink.nsSelection]
         textView.allowsUndo = true
         textView.textContainerInset = NSSize(width: 0, height: 4)
         textView.isHorizontallyResizable = false
@@ -54,6 +55,9 @@ struct CanvasTextEditor: NSViewRepresentable {
         context.coordinator.parent = self
 
         let textView = container.textView
+        if textView.font != BlockView.blockFont {
+            textView.font = BlockView.blockFont
+        }
         if textView.string != text {
             let selected = textView.selectedRanges
             textView.string = text

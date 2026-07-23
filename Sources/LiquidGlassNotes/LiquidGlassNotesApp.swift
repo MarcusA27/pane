@@ -32,6 +32,7 @@ struct LiquidGlassNotesApp: App {
     @AppStorage(GlassDefaults.sidebarBlurKey) private var sidebarBlur = GlassDefaults.blur
     @AppStorage(GlassDefaults.sidebarFrostKey) private var sidebarFrost = GlassDefaults.frost
     @AppStorage(GlassDefaults.sidebarSmokeKey) private var sidebarSmoke = GlassDefaults.smoke
+    @AppStorage(GlassDefaults.liquidGlassKey) private var liquidGlass = GlassDefaults.liquidGlass
     @AppStorage(PaneTheme.key) private var theme = PaneTheme.systemValue
 
     var body: some Scene {
@@ -50,11 +51,17 @@ struct LiquidGlassNotesApp: App {
                     PaneTheme.apply(newTheme)
                 }
                 .background(
-                    ZStack {
-                        VisualEffectView(material: .hudWindow, blendingMode: .behindWindow)
-                            .opacity(glassBlur)
-                        Color.white.opacity(glassFrost * GlassDefaults.maxFrostOpacity)
-                        Color.black.opacity(glassSmoke * GlassDefaults.maxSmokeOpacity)
+                    Group {
+                        if liquidGlass {
+                            ZStack {
+                                VisualEffectView(material: .hudWindow, blendingMode: .behindWindow)
+                                    .opacity(glassBlur)
+                                Color.white.opacity(glassFrost * GlassDefaults.maxFrostOpacity)
+                                Color.black.opacity(glassSmoke * GlassDefaults.maxSmokeOpacity)
+                            }
+                        } else {
+                            OpaqueBackground.canvas
+                        }
                     }
                     .ignoresSafeArea()
                 )

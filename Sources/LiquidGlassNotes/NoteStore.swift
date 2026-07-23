@@ -1,11 +1,51 @@
 import Foundation
 import SwiftUI
 
+/// A span of a block's text carrying bold and/or italic. Offsets are UTF-16
+/// (NSString) positions, matching how the text view reports ranges.
+struct StyleRun: Codable, Hashable {
+    var start: Int
+    var length: Int
+    var bold: Bool = false
+    var italic: Bool = false
+}
+
 struct TextBlock: Identifiable, Codable, Hashable {
     var id: UUID = UUID()
     var x: Double
     var y: Double
     var text: String = ""
+    var styles: [StyleRun] = []
+
+    init(id: UUID = UUID(), x: Double, y: Double, text: String = "", styles: [StyleRun] = []) {
+        self.id = id
+        self.x = x
+        self.y = y
+        self.text = text
+        self.styles = styles
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case id, x, y, text, styles
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        self.id = try c.decodeIfPresent(UUID.self, forKey: .id) ?? UUID()
+        self.x = try c.decode(Double.self, forKey: .x)
+        self.y = try c.decode(Double.self, forKey: .y)
+        self.text = try c.decodeIfPresent(String.self, forKey: .text) ?? ""
+        self.styles = try c.decodeIfPresent([StyleRun].self, forKey: .styles) ?? []
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encode(id, forKey: .id)
+        try c.encode(x, forKey: .x)
+        try c.encode(y, forKey: .y)
+        try c.encode(text, forKey: .text)
+        if !styles.isEmpty { try c.encode(styles, forKey: .styles) }
+    }
 }
 
 struct Stroke: Identifiable, Codable, Hashable {
@@ -127,7 +167,14 @@ struct Note: Identifiable, Codable, Hashable {
     var displayTitle: String {
         let trimmed = title.trimmingCharacters(in: .whitespacesAndNewlines)
         if !trimmed.isEmpty { return trimmed }
-        return orderedLines.first ?? "New Note"
+        return orderedLines.first ?? "Untitled"
+    }
+
+    /// No title, no drawings, and no non-whitespace text in any block.
+    var isEmpty: Bool {
+        title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            && annotations.isEmpty
+            && blocks.allSatisfy { $0.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
     }
 
     var snippet: String {
@@ -148,7 +195,13 @@ final class NoteStore: ObservableObject {
     static let shared = NoteStore()
 
     @Published var notes: [Note] = []
-    @Published var selection: Note.ID?
+    @Published var selection: Note.ID? {
+        didSet {
+            if let previous = oldValue, previous != selection {
+                discardIfEmpty(previous)
+            }
+        }
+    }
 
     private let fileURL: URL
     private let backupURL: URL
@@ -227,6 +280,17 @@ final class NoteStore: ObservableObject {
         let before = notes.count
         notes.removeAll { ($0.deletedAt ?? .distantFuture) < cutoff }
         if notes.count != before { scheduleSave() }
+    }
+
+    /// A note left completely empty is discarded once it's no longer open, so
+    /// abandoned "Untitled" notes don't pile up. Hard delete — there's nothing
+    /// to recover.
+    private func discardIfEmpty(_ id: Note.ID) {
+        guard let idx = notes.firstIndex(where: { $0.id == id }),
+              notes[idx].deletedAt == nil,
+              notes[idx].isEmpty else { return }
+        notes.remove(at: idx)
+        scheduleSave()
     }
 
     func softDelete(noteID: Note.ID) {

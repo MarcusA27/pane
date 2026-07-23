@@ -293,7 +293,8 @@ struct PlaybackCanvas: View {
 
             ForEach(frame.blocks) { block in
                 Text(block.text.isEmpty ? " " : block.text)
-                    .font(.system(size: 15))
+                    .font(PaneFonts.swiftUI(family: PaneFonts.stored(PaneFonts.noteKey),
+                                            size: 15, weight: .regular, systemDesign: .serif))
                     .foregroundStyle(Ink.text)
                     .shadow(color: .black.opacity(0.18), radius: 1.2, x: 0.5, y: 1.2)
                     .frame(maxWidth: 480, alignment: .topLeading)

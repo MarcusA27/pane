@@ -88,11 +88,21 @@ struct CanvasTextEditor: NSViewRepresentable {
     final class Coordinator: NSObject, NSTextViewDelegate {
         var parent: CanvasTextEditor
         var lastIsFocused: Bool = false
+        private let textUndoManager = UndoManager()
         init(_ parent: CanvasTextEditor) { self.parent = parent }
 
         func textDidChange(_ notification: Notification) {
             guard let tv = notification.object as? NSTextView else { return }
             parent.text = tv.string
+        }
+
+        // Scope each block's text undo to its own manager rather than the
+        // window's. When an emptied block is auto-removed on focus-out, its
+        // undo actions deallocate with the block instead of lingering in the
+        // window manager, where a later ⌘Z would invoke them against the
+        // destroyed text view and crash.
+        func undoManager(for view: NSTextView) -> UndoManager? {
+            textUndoManager
         }
     }
 }

@@ -528,6 +528,27 @@ final class CanvasUndo: ObservableObject {
         }
         undoManager.setActionName("Erase")
     }
+
+    func registerBlockRemoved(_ block: TextBlock, note: Binding<Note>) {
+        undoManager.registerUndo(withTarget: self) { target in
+            note.wrappedValue.blocks.append(block)
+            note.wrappedValue.history.append(.blockCreated(blockID: block.id, x: block.x, y: block.y, at: Date()))
+            if !block.text.isEmpty {
+                note.wrappedValue.history.append(.blockTextRun(blockID: block.id, text: block.text, at: Date()))
+            }
+            target.registerBlockAdded(block, note: note)
+        }
+        undoManager.setActionName("Delete Block")
+    }
+
+    func registerBlockAdded(_ block: TextBlock, note: Binding<Note>) {
+        undoManager.registerUndo(withTarget: self) { target in
+            note.wrappedValue.blocks.removeAll { $0.id == block.id }
+            note.wrappedValue.history.append(.blockDeleted(blockID: block.id, at: Date()))
+            target.registerBlockRemoved(block, note: note)
+        }
+        undoManager.setActionName("Delete Block")
+    }
 }
 
 struct Editor: View {
@@ -542,6 +563,7 @@ struct Editor: View {
     @State private var lastRecordedText: [UUID: String] = [:]
     @State private var selectedBlockIDs: Set<UUID> = []
     @State private var selectedStrokeIDs: Set<UUID> = []
+    @State private var focusedSnapshot: TextBlock?
     @StateObject private var canvasUndo = CanvasUndo()
 
     var body: some View {
@@ -680,6 +702,7 @@ struct Editor: View {
                 lastRecordedText[newID] = block.text
             }
             handleFocusChange(oldID: oldID)
+            focusedSnapshot = newID.flatMap { id in note.blocks.first { $0.id == id } }
         }
         .onChange(of: tool) { _, newTool in
             if newTool != .text {
@@ -760,6 +783,13 @@ struct Editor: View {
                 note.blocks.removeAll { $0.id == oldID }
                 lastRecordedText[oldID] = nil
                 record(.blockDeleted(blockID: oldID, at: Date()))
+                // If the block had content before it was emptied, make the
+                // vanish undoable so ⌘Z restores it. Blocks that were never
+                // given content are just abandoned — nothing worth restoring.
+                if let snap = focusedSnapshot, snap.id == oldID,
+                   !snap.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                    canvasUndo.registerBlockRemoved(snap, note: $note)
+                }
             } else {
                 commitTextRun(blockID: oldID, text: block.text)
             }
